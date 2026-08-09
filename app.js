@@ -76,6 +76,8 @@
   let screenStream = null;
   let micOn = true, camOn = true;
   let timerInterval = null, callSeconds = 0;
+  let isHost = false;          // true = created offer, false = joined
+  let joinerReadyForCall = false; // joiner must explicitly enter call
 
   // ICE / STUN config — only used for NAT traversal, no media relay
   const RTC_CONFIG = {
@@ -203,12 +205,20 @@
       remoteNoVid.classList.add('hidden');
     };
 
-    // Connection state
+    // Connection state — only the HOST auto-enters the call.
+    // The JOINER stays on the answer screen until they click "Enter Call".
     conn.onconnectionstatechange = () => {
       const s = conn.connectionState;
       console.log('[RTC] connectionState:', s);
       if (s === 'connected') {
-        enterCall();
+        if (isHost || joinerReadyForCall) {
+          enterCall();
+        } else {
+          // Joiner: show "connected" status, let them copy answer first
+          joinWaiting.classList.add('connected');
+          joinWaiting.querySelector('span').textContent = 'Connected! Copy your answer above, then enter the call.';
+          showJoinEnterButton();
+        }
       } else if (s === 'disconnected' || s === 'failed' || s === 'closed') {
         toast('Peer disconnected');
         endCall();
@@ -217,18 +227,33 @@
 
     conn.oniceconnectionstatechange = () => {
       console.log('[RTC] iceConnectionState:', conn.iceConnectionState);
-      if (conn.iceConnectionState === 'connected' || conn.iceConnectionState === 'completed') {
-        enterCall();
-      }
+      // Only log — don't auto-enter call from here (avoids race condition)
     };
 
     return conn;
+  }
+
+  /** Show an "Enter Call" button for the joiner */
+  function showJoinEnterButton() {
+    // Avoid duplicates
+    if ($('#join-enter-call')) return;
+    const btn = document.createElement('button');
+    btn.id = 'join-enter-call';
+    btn.className = 'btn btn-primary full-width';
+    btn.style.marginTop = 'var(--sp-4)';
+    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg> Enter Call';
+    btn.addEventListener('click', () => {
+      joinerReadyForCall = true;
+      enterCall();
+    });
+    joinStep2.appendChild(btn);
   }
 
   // ────────────────────────────────────────────────
   //  HOST flow  (Create Offer → Paste Answer)
   // ────────────────────────────────────────────────
   btnCreate.addEventListener('click', async () => {
+    isHost = true;
     showView('host');
     await acquireMedia();
     attachPreview(hostPreview, hostPreviewOff);
@@ -291,6 +316,8 @@
   //  JOIN flow  (Paste Offer → Send Answer)
   // ────────────────────────────────────────────────
   btnJoin.addEventListener('click', async () => {
+    isHost = false;
+    joinerReadyForCall = false;
     showView('join');
     await acquireMedia();
     attachPreview(joinPreview, joinPreviewOff);
