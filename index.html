@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MeshMeet — Zero-Server P2P Video Calls</title>
+  <meta name="description" content="Truly private peer-to-peer video calls. No signaling servers, no third parties. Pure WebRTC with manual SDP exchange." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ─── Landing View ─── -->
+  <section id="landing-view" class="view active">
+    <div class="landing-bg">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
+    <div class="landing-content">
+      <div class="logo-mark">
+        <svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="22" stroke="url(#lg)" stroke-width="3"/><circle cx="16" cy="20" r="4" fill="url(#lg)"/><circle cx="32" cy="20" r="4" fill="url(#lg)"/><path d="M16 20L32 20" stroke="url(#lg)" stroke-width="2" stroke-dasharray="3 3"/><circle cx="24" cy="34" r="4" fill="url(#lg)"/><path d="M16 20L24 34M32 20L24 34" stroke="url(#lg)" stroke-width="2" stroke-dasharray="3 3"/><defs><linearGradient id="lg" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#6C63FF"/><stop offset="1" stop-color="#3CF0C5"/></linearGradient></defs></svg>
+      </div>
+      <h1 class="hero-title">Mesh<span class="accent">Meet</span></h1>
+      <p class="hero-subtitle">Truly private, peer-to-peer video calls.<br/>Zero servers. Zero sign-up. You exchange the keys.</p>
+      <div class="landing-actions">
+        <button id="btn-create" class="btn btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg>
+          Create Offer
+        </button>
+        <button id="btn-join" class="btn btn-secondary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Join with Offer
+        </button>
+      </div>
+      <div class="how-it-works">
+        <h3>How it works</h3>
+        <div class="steps-row">
+          <div class="step-chip"><span class="step-num">1</span> One person creates an <strong>Offer</strong></div>
+          <svg class="step-arrow" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <div class="step-chip"><span class="step-num">2</span> Send it to your peer via any channel</div>
+          <svg class="step-arrow" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <div class="step-chip"><span class="step-num">3</span> They paste it & send back an <strong>Answer</strong></div>
+        </div>
+      </div>
+      <div class="features-strip">
+        <div class="feature-chip">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          DTLS-SRTP encrypted
+        </div>
+        <div class="feature-chip">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          No signaling server
+        </div>
+        <div class="feature-chip">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          100% private
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Setup View (Host: create offer / paste answer) ─── -->
+  <section id="setup-host-view" class="view">
+    <div class="setup-container">
+      <div class="setup-preview">
+        <video id="host-preview" autoplay muted playsinline></video>
+        <div id="host-preview-off" class="preview-placeholder">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg>
+          <span>Camera off</span>
+        </div>
+        <div class="preview-controls">
+          <button id="host-toggle-mic" class="control-btn active" title="Toggle Mic">
+            <svg class="icon-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            <svg class="icon-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.13 1.49-.35 2.17"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
+          <button id="host-toggle-cam" class="control-btn active" title="Toggle Camera">
+            <svg class="icon-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg>
+            <svg class="icon-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="setup-panel">
+        <!-- Step 1: Offer generated -->
+        <div id="host-step1" class="setup-step active">
+          <div class="step-header">
+            <span class="step-badge">Step 1 of 2</span>
+            <h2>Send Your Offer</h2>
+          </div>
+          <p class="step-desc">Your browser generated a connection offer. <strong>Copy the text below</strong> and send it to your peer through any channel — chat, email, SMS, anything.</p>
+          <div class="info-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>This blob contains your public IP and codec capabilities — <strong>no private data</strong>. It's useless without the matching answer.</span>
+          </div>
+          <div class="sdp-field">
+            <label>Your Offer</label>
+            <textarea id="host-offer-output" readonly rows="4" placeholder="Generating offer…"></textarea>
+            <button id="host-copy-offer" class="btn btn-primary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Offer</button>
+          </div>
+          <button id="host-next" class="btn btn-secondary full-width">I've sent it — paste their Answer →</button>
+        </div>
+
+        <!-- Step 2: Paste answer -->
+        <div id="host-step2" class="setup-step">
+          <div class="step-header">
+            <span class="step-badge">Step 2 of 2</span>
+            <h2>Paste Their Answer</h2>
+          </div>
+          <p class="step-desc">Your peer will generate an answer from your offer. Paste it below to complete the connection.</p>
+          <div class="sdp-field">
+            <label>Peer's Answer</label>
+            <textarea id="host-answer-input" rows="4" placeholder="Paste the answer blob here…"></textarea>
+            <button id="host-connect" class="btn btn-primary full-width">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              Connect
+            </button>
+          </div>
+          <button id="host-back-step1" class="btn btn-ghost">← Back to offer</button>
+        </div>
+
+        <button id="host-back-landing" class="btn btn-ghost" style="margin-top:var(--sp-3)">← Back to start</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Setup View (Joiner: paste offer / show answer) ─── -->
+  <section id="setup-join-view" class="view">
+    <div class="setup-container">
+      <div class="setup-preview">
+        <video id="join-preview" autoplay muted playsinline></video>
+        <div id="join-preview-off" class="preview-placeholder">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg>
+          <span>Camera off</span>
+        </div>
+        <div class="preview-controls">
+          <button id="join-toggle-mic" class="control-btn active" title="Toggle Mic">
+            <svg class="icon-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            <svg class="icon-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.13 1.49-.35 2.17"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
+          <button id="join-toggle-cam" class="control-btn active" title="Toggle Camera">
+            <svg class="icon-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg>
+            <svg class="icon-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="setup-panel">
+        <!-- Step 1: Paste offer -->
+        <div id="join-step1" class="setup-step active">
+          <div class="step-header">
+            <span class="step-badge">Step 1 of 2</span>
+            <h2>Paste the Offer</h2>
+          </div>
+          <p class="step-desc">Paste the connection offer you received from the person who wants to call you.</p>
+          <div class="sdp-field">
+            <label>Peer's Offer</label>
+            <textarea id="join-offer-input" rows="4" placeholder="Paste the offer blob here…"></textarea>
+            <button id="join-process" class="btn btn-primary full-width">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              Generate Answer
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 2: Show answer -->
+        <div id="join-step2" class="setup-step">
+          <div class="step-header">
+            <span class="step-badge">Step 2 of 2</span>
+            <h2>Send Your Answer</h2>
+          </div>
+          <p class="step-desc"><strong>Copy the text below</strong> and send it back to your peer. Once they paste it, you'll be connected directly.</p>
+          <div class="sdp-field">
+            <label>Your Answer</label>
+            <textarea id="join-answer-output" readonly rows="4" placeholder="Generating answer…"></textarea>
+            <button id="join-copy-answer" class="btn btn-primary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Answer</button>
+          </div>
+          <div id="join-waiting" class="lobby-status">
+            <div class="pulse-dot"></div>
+            <span>Waiting for peer to paste your answer…</span>
+          </div>
+        </div>
+
+        <button id="join-back-landing" class="btn btn-ghost" style="margin-top:var(--sp-3)">← Back to start</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Call View ─── -->
+  <section id="call-view" class="view">
+    <div class="call-grid" id="call-grid">
+      <div class="video-tile" id="tile-local">
+        <video id="video-local" autoplay muted playsinline></video>
+        <div class="tile-label">You</div>
+        <div id="local-no-video" class="tile-avatar hidden">
+          <div class="avatar-circle"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        </div>
+      </div>
+      <div class="video-tile" id="tile-remote">
+        <video id="video-remote" autoplay playsinline></video>
+        <div class="tile-label">Peer</div>
+        <div id="remote-no-video" class="tile-avatar">
+          <div class="avatar-circle"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        </div>
+      </div>
+    </div>
+    <div class="call-bar">
+      <div class="call-bar-inner">
+        <div class="call-info">
+          <span id="call-timer">00:00</span>
+          <span class="call-separator">·</span>
+          <span class="call-label-p2p">Direct P2P</span>
+        </div>
+        <div class="call-controls">
+          <button id="btn-toggle-mic" class="control-btn active" title="Toggle Mic">
+            <svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            <svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.13 1.49-.35 2.17"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
+          <button id="btn-toggle-cam" class="control-btn active" title="Toggle Camera">
+            <svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg>
+            <svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg>
+          </button>
+          <button id="btn-screen-share" class="control-btn" title="Share Screen">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </button>
+          <button id="btn-end-call" class="control-btn btn-danger" title="End Call">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.11 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91"/></svg>
+          </button>
+        </div>
+        <div class="call-actions-right">
+          <button id="btn-fullscreen" class="control-btn" title="Fullscreen">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"><span id="toast-message"></span></div>
+
+  <!-- NO PeerJS — pure WebRTC -->
+  <script src="app.js"></script>
+</body>
+</html>
