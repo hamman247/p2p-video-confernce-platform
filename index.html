@@ -20,22 +20,26 @@
         <svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="22" stroke="url(#lg)" stroke-width="3"/><circle cx="16" cy="20" r="4" fill="url(#lg)"/><circle cx="32" cy="20" r="4" fill="url(#lg)"/><path d="M16 20L32 20" stroke="url(#lg)" stroke-width="2" stroke-dasharray="3 3"/><circle cx="24" cy="34" r="4" fill="url(#lg)"/><path d="M16 20L24 34M32 20L24 34" stroke="url(#lg)" stroke-width="2" stroke-dasharray="3 3"/><defs><linearGradient id="lg" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#6C63FF"/><stop offset="1" stop-color="#3CF0C5"/></linearGradient></defs></svg>
       </div>
       <h1 class="hero-title">Mesh<span class="accent">Meet</span></h1>
-      <p class="hero-subtitle">Private group video calls for up to 6 people.<br/>Zero servers. You exchange the keys.</p>
+      <p class="hero-subtitle">Private group video calls for up to 6 people.</p>
       <div class="name-input-row">
         <input type="text" id="input-name" placeholder="Your display name" maxlength="20" autocomplete="off" spellcheck="false" />
       </div>
-      <div class="landing-actions">
-        <button id="btn-create" class="btn btn-primary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg> Host a Meeting</button>
-        <button id="btn-join" class="btn btn-secondary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Join with Offer</button>
-      </div>
-      <div class="how-it-works">
-        <h3>How it works</h3>
-        <div class="steps-row">
-          <div class="step-chip"><span class="step-num">1</span> Host creates <strong>Offers</strong></div>
-          <svg class="step-arrow" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          <div class="step-chip"><span class="step-num">2</span> Each joiner sends an <strong>Answer</strong></div>
-          <svg class="step-arrow" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          <div class="step-chip"><span class="step-num">3</span> Everyone connects <strong>directly</strong></div>
+      <div class="mode-cards">
+        <div class="mode-card">
+          <div class="mode-header"><span class="mode-icon">⚡</span><h3>Quick Connect</h3></div>
+          <p class="mode-desc">Share a short room code. Auto-connects via PeerJS signaling. Media stays direct P2P.</p>
+          <div class="mode-btns">
+            <button id="btn-quick-host" class="btn btn-primary btn-sm">Host</button>
+            <button id="btn-quick-join" class="btn btn-secondary btn-sm">Join</button>
+          </div>
+        </div>
+        <div class="mode-card">
+          <div class="mode-header"><span class="mode-icon">🔒</span><h3>Secure Connect</h3></div>
+          <p class="mode-desc">Manual Meeting PassKey exchange. Zero third-party servers involved.</p>
+          <div class="mode-btns">
+            <button id="btn-secure-host" class="btn btn-primary btn-sm">Host</button>
+            <button id="btn-secure-join" class="btn btn-secondary btn-sm">Join with PassKey</button>
+          </div>
         </div>
       </div>
       <div class="features-strip">
@@ -46,7 +50,57 @@
     </div>
   </section>
 
-  <!-- ═══ Host Room ═══ -->
+  <!-- ═══ Quick Host ═══ -->
+  <section id="view-quick-host" class="view">
+    <div class="setup-container">
+      <div class="setup-preview">
+        <video id="qh-preview" autoplay muted playsinline></video>
+        <div id="qh-preview-off" class="preview-placeholder"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg><span>Camera off</span></div>
+        <div class="preview-controls">
+          <button id="qh-mic" class="control-btn active" title="Mic"><svg class="icon-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><svg class="icon-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.13 1.49-.35 2.17"/></svg></button>
+          <button id="qh-cam" class="control-btn active" title="Camera"><svg class="icon-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg><svg class="icon-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"/></svg></button>
+        </div>
+      </div>
+      <div class="setup-panel">
+        <h2>Quick Room</h2>
+        <p class="step-desc">Share this room code or link. Participants connect automatically.</p>
+        <div class="room-code-display"><span id="qh-room-code">------</span></div>
+        <div class="btn-row" style="margin-bottom:var(--sp-4)">
+          <button id="qh-copy-link" class="btn btn-primary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Copy Link</button>
+          <button id="qh-copy-code" class="btn btn-secondary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Code</button>
+        </div>
+        <div id="qh-participant-list" class="participant-list"></div>
+        <p class="participant-count"><span id="qh-count">1</span>/6 participants</p>
+        <div id="qh-status" class="lobby-status"><div class="pulse-dot"></div><span>Waiting for participants…</span></div>
+        <button id="qh-enter-call" class="btn btn-primary full-width" disabled style="margin-top:var(--sp-4)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg> Enter Call</button>
+        <button id="qh-back" class="btn btn-ghost">← Back to start</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Quick Join ═══ -->
+  <section id="view-quick-join" class="view">
+    <div class="setup-container">
+      <div class="setup-preview">
+        <video id="qj-preview" autoplay muted playsinline></video>
+        <div id="qj-preview-off" class="preview-placeholder"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg><span>Camera off</span></div>
+        <div class="preview-controls">
+          <button id="qj-mic" class="control-btn active" title="Mic"><svg class="icon-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><svg class="icon-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.13 1.49-.35 2.17"/></svg></button>
+          <button id="qj-cam" class="control-btn active" title="Camera"><svg class="icon-on" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg><svg class="icon-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"/></svg></button>
+        </div>
+      </div>
+      <div class="setup-panel">
+        <h2>Join Room</h2>
+        <p class="step-desc">Enter the room code shared by the host.</p>
+        <div class="room-code-input"><input type="text" id="qj-code-input" placeholder="Enter room code" maxlength="6" autocomplete="off" spellcheck="false" /></div>
+        <button id="qj-connect" class="btn btn-primary full-width" style="margin-top:var(--sp-3)">Connect</button>
+        <div id="qj-status" class="lobby-status" style="margin-top:var(--sp-4);display:none"><div class="pulse-dot"></div><span>Connecting…</span></div>
+        <button id="qj-back" class="btn btn-ghost" style="margin-top:var(--sp-3)">← Back to start</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Secure Host Room ═══ -->
   <section id="view-host" class="view">
     <div class="setup-container">
       <div class="setup-preview">
@@ -71,18 +125,21 @@
           </div>
           <div id="host-exch-offer" class="exch-state">
             <div class="step-badge">Step 1 of 2</div>
-            <p class="step-desc">Copy this offer and send it to the next participant:</p>
+            <p class="step-desc">Share the link below or copy the Meeting PassKey to send to the next participant:</p>
             <div class="sdp-field">
               <textarea id="host-offer-out" readonly rows="3"></textarea>
-              <button id="host-copy-offer" class="btn btn-primary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+              <div class="btn-row">
+                <button id="host-copy-link" class="btn btn-primary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Copy Link</button>
+                <button id="host-copy-offer" class="btn btn-secondary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy PassKey</button>
+              </div>
             </div>
-            <button id="host-next-step" class="btn btn-secondary btn-sm full-width">I sent it → paste their answer</button>
+            <button id="host-next-step" class="btn btn-secondary btn-sm full-width">I sent it → paste their Response Key</button>
           </div>
           <div id="host-exch-answer" class="exch-state">
             <div class="step-badge">Step 2 of 2</div>
-            <p class="step-desc">Paste the participant's answer:</p>
+            <p class="step-desc">Paste the participant's Response Key:</p>
             <div class="sdp-field">
-              <textarea id="host-answer-in" rows="3" placeholder="Paste answer here…"></textarea>
+              <textarea id="host-answer-in" rows="3" placeholder="Paste Response Key here…"></textarea>
               <button id="host-connect-peer" class="btn btn-primary btn-sm full-width">Connect</button>
             </div>
             <button id="host-cancel-exch" class="btn btn-ghost">Cancel</button>
@@ -108,21 +165,21 @@
       </div>
       <div class="setup-panel">
         <div id="join-step1" class="setup-step active">
-          <div class="step-header"><span class="step-badge">Step 1 of 2</span><h2>Paste the Offer</h2></div>
-          <p class="step-desc">Paste the offer you received from the meeting host.</p>
+          <div class="step-header"><span class="step-badge">Step 1 of 2</span><h2>Paste the Meeting PassKey</h2></div>
+          <p class="step-desc">Paste the Meeting PassKey you received from the host.</p>
           <div class="sdp-field">
-            <textarea id="join-offer-in" rows="4" placeholder="Paste the offer blob here…"></textarea>
-            <button id="join-process" class="btn btn-primary full-width"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Generate Answer</button>
+            <textarea id="join-offer-in" rows="4" placeholder="Paste Meeting PassKey here…"></textarea>
+            <button id="join-process" class="btn btn-primary full-width"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Generate Response Key</button>
           </div>
         </div>
         <div id="join-step2" class="setup-step">
-          <div class="step-header"><span class="step-badge">Step 2 of 2</span><h2>Send Your Answer</h2></div>
+          <div class="step-header"><span class="step-badge">Step 2 of 2</span><h2>Send Your Response Key</h2></div>
           <p class="step-desc"><strong>Copy the text below</strong> and send it back to the host.</p>
           <div class="sdp-field">
             <textarea id="join-answer-out" readonly rows="4"></textarea>
-            <button id="join-copy" class="btn btn-primary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Answer</button>
+            <button id="join-copy" class="btn btn-primary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Response Key</button>
           </div>
-          <div id="join-status" class="lobby-status"><div class="pulse-dot"></div><span>Waiting for host to paste your answer…</span></div>
+          <div id="join-status" class="lobby-status"><div class="pulse-dot"></div><span>Waiting for host to paste your Response Key…</span></div>
           <button id="join-enter-call" class="btn btn-primary full-width" style="display:none;margin-top:var(--sp-3)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg> Enter Call</button>
         </div>
         <button id="join-back" class="btn btn-ghost" style="margin-top:var(--sp-3)">← Back to start</button>
@@ -141,14 +198,17 @@
         <button id="add-overlay-close" class="modal-close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         <h3>Add Participant</h3>
         <div id="add-step-offer" class="exch-state active">
-          <p class="step-desc">Copy this offer and send it to the new participant:</p>
+          <p class="step-desc">Share the link or copy the Meeting PassKey for the new participant:</p>
           <div class="sdp-field"><textarea id="add-offer-out" readonly rows="3"></textarea>
-          <button id="add-copy-offer" class="btn btn-primary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button></div>
-          <button id="add-next-step" class="btn btn-secondary btn-sm full-width">Paste their answer →</button>
+          <div class="btn-row">
+            <button id="add-copy-link" class="btn btn-primary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Copy Link</button>
+            <button id="add-copy-offer" class="btn btn-secondary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy PassKey</button>
+          </div></div>
+          <button id="add-next-step" class="btn btn-secondary btn-sm full-width">Paste their Response Key →</button>
         </div>
         <div id="add-step-answer" class="exch-state">
-          <p class="step-desc">Paste their answer:</p>
-          <div class="sdp-field"><textarea id="add-answer-in" rows="3" placeholder="Paste answer…"></textarea>
+          <p class="step-desc">Paste their Response Key:</p>
+          <div class="sdp-field"><textarea id="add-answer-in" rows="3" placeholder="Paste Response Key…"></textarea>
           <button id="add-connect" class="btn btn-primary btn-sm full-width">Connect</button></div>
         </div>
       </div>
@@ -169,6 +229,7 @@
   </section>
 
   <div id="toast" class="toast hidden"><span id="toast-msg"></span></div>
+  <script src="https://unpkg.com/peerjs@1/dist/peerjs.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
