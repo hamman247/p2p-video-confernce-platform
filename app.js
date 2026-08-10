@@ -369,42 +369,62 @@ function setupQuickPeerHandlers(peer, peerId, entry){
 // Quick Host
 async function quickHost(){
   roomCode=genRoomCode();
-  myPeer=new Peer(roomCode,{config:RTC_CFG});
-  myPeer.on('error',e=>{ toast('PeerJS error: '+e.type); console.error(e); });
-  myPeer.on('open',id=>{
-    qhRoomCode.textContent=id;
-    const u=new URL(window.location); u.search=''; u.searchParams.set('room',id); history.replaceState(null,'',u);
-    toast('Room created! Share the code or link.');
-  });
-  // Incoming calls (joiners)
-  myPeer.on('call', call=>{
-    const pid=call.peer;
-    call.answer(localStream);
-    let entry=peers.get(pid);
-    if(!entry){ entry={dataConn:null,mediaConn:call,stream:null,name:'Peer',connected:false}; peers.set(pid,entry); }
-    else { entry.mediaConn=call; }
-    call.on('stream', s=>{ entry.stream=s; entry.connected=true; updateRemoteTile(pid,s); updateQuickHostUI(); if(inCall)addVideoTile(pid,entry.name,s); });
-    call.on('close',()=>onQuickPeerLeft(pid));
-    // Tell new joiner about all existing peers
-    setTimeout(()=>{
-      const peerIds=[...peers.keys()].filter(k=>k!==pid&&peers.get(k).connected);
-      if(entry.dataConn&&entry.dataConn.open) entry.dataConn.send(JSON.stringify({type:'peer-list',peers:peerIds}));
-      // Tell existing peers about new one
-      peers.forEach((p,k)=>{ if(k!==pid&&p.connected&&p.dataConn&&p.dataConn.open) p.dataConn.send(JSON.stringify({type:'new-peer',peerId:pid})); });
-    },1000);
-  });
-  // Incoming data connections
-  myPeer.on('connection', conn=>{
-    const pid=conn.peer;
-    let entry=peers.get(pid);
-    if(!entry){ entry={dataConn:conn,mediaConn:null,stream:null,name:'Peer',connected:false}; peers.set(pid,entry); }
-    else { entry.dataConn=conn; }
-    conn.on('open',()=>{ conn.send(JSON.stringify({type:'display-name',name:myName,peerId:myPeer.id})); });
-    conn.on('data', raw=>{
-      let msg; try{msg=JSON.parse(raw);}catch{return;}
-      if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(pid,msg.name); updateQuickHostUI(); }
-      if(msg.type==='cam-status') updateRemoteTileAvatar(pid, msg.cam);
-    });
+  return new Promise((resolve)=>{
+    function tryCreate(code, attempt){
+      if(myPeer){try{myPeer.destroy();}catch{}}
+      myPeer=new Peer(code,{config:RTC_CFG});
+      myPeer.on('error',e=>{
+        if(e.type==='unavailable-id' && attempt<3){
+          // ID taken on PeerJS server, try another code
+          roomCode=genRoomCode();
+          toast('Room code taken, trying another…');
+          tryCreate(roomCode, attempt+1);
+          return;
+        }
+        toast('PeerJS error: '+e.type);
+        console.error(e);
+      });
+      myPeer.on('open',id=>{
+        roomCode=id; // Ensure we use the actual registered ID
+        qhRoomCode.textContent=id;
+        const u=new URL(window.location); u.search=''; u.searchParams.set('room',id); history.replaceState(null,'',u);
+        toast('Room created! Share the code or link.');
+        setupHostListeners();
+        resolve();
+      });
+    }
+    function setupHostListeners(){
+      // Incoming calls (joiners)
+      myPeer.on('call', call=>{
+        const pid=call.peer;
+        call.answer(localStream);
+        let entry=peers.get(pid);
+        if(!entry){ entry={dataConn:null,mediaConn:call,stream:null,name:'Peer',connected:false}; peers.set(pid,entry); }
+        else { entry.mediaConn=call; }
+        call.on('stream', s=>{ entry.stream=s; entry.connected=true; updateRemoteTile(pid,s); updateQuickHostUI(); if(inCall)addVideoTile(pid,entry.name,s); });
+        call.on('close',()=>onQuickPeerLeft(pid));
+        // Tell new joiner about all existing peers
+        setTimeout(()=>{
+          const peerIds=[...peers.keys()].filter(k=>k!==pid&&peers.get(k).connected);
+          if(entry.dataConn&&entry.dataConn.open) entry.dataConn.send(JSON.stringify({type:'peer-list',peers:peerIds}));
+          peers.forEach((p,k)=>{ if(k!==pid&&p.connected&&p.dataConn&&p.dataConn.open) p.dataConn.send(JSON.stringify({type:'new-peer',peerId:pid})); });
+        },1000);
+      });
+      // Incoming data connections
+      myPeer.on('connection', conn=>{
+        const pid=conn.peer;
+        let entry=peers.get(pid);
+        if(!entry){ entry={dataConn:conn,mediaConn:null,stream:null,name:'Peer',connected:false}; peers.set(pid,entry); }
+        else { entry.dataConn=conn; }
+        conn.on('open',()=>{ conn.send(JSON.stringify({type:'display-name',name:myName,peerId:myPeer.id})); });
+        conn.on('data', raw=>{
+          let msg; try{msg=JSON.parse(raw);}catch{return;}
+          if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(pid,msg.name); updateQuickHostUI(); }
+          if(msg.type==='cam-status') updateRemoteTileAvatar(pid, msg.cam);
+        });
+      });
+    }
+    tryCreate(roomCode, 0);
   });
 }
 
@@ -415,21 +435,51 @@ function onQuickPeerLeft(pid){
   if(isHost) updateQuickHostUI();
 }
 
-// Quick Join
+// Quick Join — with retry logic
+let quickJoinRetries=0;
+const MAX_JOIN_RETRIES=3;
+
 async function quickJoin(code){
+  if(myPeer){try{myPeer.destroy();}catch{}}
+  peers.clear();
   myPeer=new Peer(undefined,{config:RTC_CFG});
-  myPeer.on('error',e=>{ toast('Connection error: '+e.type); console.error(e); });
+
+  myPeer.on('error',e=>{
+    console.error('PeerJS error:',e);
+    if(e.type==='peer-unavailable' && quickJoinRetries<MAX_JOIN_RETRIES){
+      quickJoinRetries++;
+      qjStatus.querySelector('span').textContent='Room not found, retrying ('+quickJoinRetries+'/'+MAX_JOIN_RETRIES+')…';
+      setTimeout(()=>quickJoin(code), 2000);
+      return;
+    }
+    if(e.type==='peer-unavailable'){
+      toast('Room not found. Check the code and make sure the host is online.');
+      qjStatus.querySelector('span').textContent='Room not found. Verify the code and try again.';
+      qjStatus.classList.remove('connected');
+    } else {
+      toast('Connection error: '+e.type);
+    }
+  });
+
   myPeer.on('open',()=>{
+    qjStatus.querySelector('span').textContent='Connecting to room '+code+'…';
     // Connect data channel to host
     const dc=myPeer.connect(code,{reliable:true});
     const entry={dataConn:dc,mediaConn:null,stream:null,name:'Host',connected:false};
     peers.set(code,entry);
     dc.on('open',()=>{
+      quickJoinRetries=0; // Reset retries on success
       dc.send(JSON.stringify({type:'display-name',name:myName,peerId:myPeer.id}));
       // Call host with our stream
       const call=myPeer.call(code,localStream);
       entry.mediaConn=call;
-      call.on('stream', s=>{ entry.stream=s; entry.connected=true; updateRemoteTile(code,s); toast('Connected to host!'); qjStatus.style.display=''; qjStatus.classList.add('connected'); qjStatus.querySelector('span').textContent='Connected! Entering call\u2026'; setTimeout(()=>enterCall(),1500); });
+      call.on('stream', s=>{
+        entry.stream=s; entry.connected=true; updateRemoteTile(code,s);
+        toast('Connected to host!');
+        qjStatus.style.display=''; qjStatus.classList.add('connected');
+        qjStatus.querySelector('span').textContent='Connected! Entering call…';
+        setTimeout(()=>enterCall(),1500);
+      });
       call.on('close',()=>onQuickPeerLeft(code));
     });
     dc.on('data', raw=>{
@@ -508,7 +558,9 @@ $('#qh-cam').addEventListener('click',toggleCam);
 $('#qj-connect').addEventListener('click',async()=>{
   const code=qjCodeInput.value.trim().toUpperCase();
   if(code.length<4){toast('Enter the room code');return;}
+  quickJoinRetries=0;
   qjStatus.style.display='';
+  qjStatus.querySelector('span').textContent='Connecting…';
   await quickJoin(code);
 });
 $('#qj-back').addEventListener('click',()=>{ cleanup(); showView('landing'); });
