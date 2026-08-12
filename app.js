@@ -17,6 +17,8 @@ const hostPreview=$('#host-preview'), hostPreviewOff=$('#host-preview-off');
 const joinPreview=$('#join-preview'), joinPreviewOff=$('#join-preview-off');
 const hostMic=$('#host-mic'), hostCam=$('#host-cam'), joinMic=$('#join-mic'), joinCam=$('#join-cam');
 const ctlMic=$('#ctl-mic'), ctlCam=$('#ctl-cam'), ctlScreen=$('#ctl-screen'), ctlEnd=$('#ctl-end'), ctlFull=$('#ctl-full'), ctlAdd=$('#ctl-add');
+const ctlEmoji=$('#ctl-emoji'), ctlSendQ=$('#ctl-send-q');
+const emojiPicker=$('#emoji-picker'), sqPanel=$('#sq-panel');
 const callGrid=$('#call-grid'), callTimer=$('#call-timer'), callCount=$('#call-count');
 const toastEl=$('#toast'), toastMsg=$('#toast-msg');
 
@@ -58,7 +60,25 @@ let roomCode = '';
 
 const peers = new Map();
 const MAX_PEERS = 6;
-const RTC_CFG = { iceServers: [{ urls:'stun:stun.l.google.com:19302' },{ urls:'stun:stun1.l.google.com:19302' }] };
+const RTC_CFG = { iceServers: [{ urls:'stun:stun.l.google.com:19302' },{ urls:'stun:stun1.google.com:19302' }] };
+let sendQuality = 'high'; // 'high', 'medium', 'low'
+
+// Broadcast a message to all peers regardless of connect mode
+function broadcastAny(msg, exclude){
+  const s=typeof msg==='string'?msg:JSON.stringify(msg);
+  peers.forEach((p,id)=>{
+    if(id===exclude) return;
+    if(p.dc&&p.dc.readyState==='open') p.dc.send(s);
+    else if(p.dataConn&&p.dataConn.open) p.dataConn.send(s);
+  });
+}
+// Send to a specific peer regardless of mode
+function sendAny(peerId, msg){
+  const s=typeof msg==='string'?msg:JSON.stringify(msg);
+  const p=peers.get(peerId); if(!p)return;
+  if(p.dc&&p.dc.readyState==='open') p.dc.send(s);
+  else if(p.dataConn&&p.dataConn.open) p.dataConn.send(s);
+}
 
 function genRoomCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<6;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 
@@ -161,6 +181,14 @@ function handleMsg(fromId, raw){
     }
     case 'peer-left': {
       onPeerLeft(msg.peerId);
+      break;
+    }
+    case 'emoji-reaction': {
+      showEmojiOnTile(msg.from||fromId, msg.emoji);
+      break;
+    }
+    case 'quality-request': {
+      handleQualityRequest(msg.from||fromId, msg.quality);
       break;
     }
   }
@@ -300,32 +328,43 @@ function setExchState(which){
 }
 
 async function hostGenOffer(){
-  const peerId = crypto.randomUUID().slice(0,8); // placeholder until joiner tells us theirs
-  const pc = createPC(peerId);
-  const dc = pc.createDataChannel('host-link');
-  const entry = { pc, dc, stream:null, name:'Pending…', connected:false, isHostLink:true, tempId:peerId };
-  // When joiner sends display-name, we'll know their real ID and name
-  setupDC(dc, peerId);
-  // ICE candidates for manual exchange: wait for gathering
-  peers.set(peerId, entry);
-  pc.createDataChannel('ctrl'); // ensure data section
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await waitICE(pc);
-  pendingPC = peerId;
-  return encode(pc.localDescription);
+  try {
+    const peerId = crypto.randomUUID().slice(0,8); // placeholder until joiner tells us theirs
+    const pc = createPC(peerId);
+    const dc = pc.createDataChannel('host-link');
+    const entry = { pc, dc, stream:null, name:'Pending…', connected:false, isHostLink:true, tempId:peerId };
+    // When joiner sends display-name, we'll know their real ID and name
+    setupDC(dc, peerId);
+    // ICE candidates for manual exchange: wait for gathering
+    peers.set(peerId, entry);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await waitICE(pc);
+    pendingPC = peerId;
+    return encode(pc.localDescription);
+  } catch(e) {
+    console.error('[hostGenOffer] Error:', e);
+    toast('Failed to generate PassKey: ' + e.message);
+    return '';
+  }
 }
 
 async function hostProcessAnswer(b64){
-  const desc = decode(b64);
-  if(!desc||desc.type!=='answer'){ toast('Invalid answer'); return false; }
-  const p = peers.get(pendingPC);
-  if(!p){ toast('No pending connection'); return false; }
-  await p.pc.setRemoteDescription(desc);
-  setExchState(exchIdle);
-  pendingPC=null;
-  toast('Participant connected!');
-  return true;
+  try {
+    const desc = decode(b64);
+    if(!desc||desc.type!=='answer'){ toast('Invalid answer'); return false; }
+    const p = peers.get(pendingPC);
+    if(!p){ toast('No pending connection'); return false; }
+    await p.pc.setRemoteDescription(desc);
+    setExchState(exchIdle);
+    pendingPC=null;
+    toast('Participant connected!');
+    return true;
+  } catch(e) {
+    console.error('[hostProcessAnswer] Error:', e);
+    toast('Failed to connect: ' + e.message);
+    return false;
+  }
 }
 
 // ══════════════════════════════════════
@@ -358,6 +397,8 @@ function setupQuickPeerHandlers(peer, peerId, entry){
       let msg; try{msg=JSON.parse(raw);}catch{return;}
       if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(peerId,msg.name); if(isHost)updateQuickHostUI(); }
       if(msg.type==='cam-status') updateRemoteTileAvatar(peerId, msg.cam);
+      if(msg.type==='emoji-reaction') showEmojiOnTile(msg.from||peerId, msg.emoji);
+      if(msg.type==='quality-request') handleQualityRequest(msg.from||peerId, msg.quality);
     });
   }
   // If we initiated the data connection
@@ -421,6 +462,8 @@ async function quickHost(){
           let msg; try{msg=JSON.parse(raw);}catch{return;}
           if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(pid,msg.name); updateQuickHostUI(); }
           if(msg.type==='cam-status') updateRemoteTileAvatar(pid, msg.cam);
+          if(msg.type==='emoji-reaction') showEmojiOnTile(msg.from||pid, msg.emoji);
+          if(msg.type==='quality-request') handleQualityRequest(msg.from||pid, msg.quality);
         });
       });
     }
@@ -486,6 +529,8 @@ async function quickJoin(code){
       let msg; try{msg=JSON.parse(raw);}catch{return;}
       if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(code,msg.name); }
       if(msg.type==='cam-status') updateRemoteTileAvatar(code, msg.cam);
+      if(msg.type==='emoji-reaction') showEmojiOnTile(msg.from||code, msg.emoji);
+      if(msg.type==='quality-request') handleQualityRequest(msg.from||code, msg.quality);
       if(msg.type==='peer-list') (msg.peers||[]).forEach(pid=>quickConnectToPeer(pid));
       if(msg.type==='new-peer') quickConnectToPeer(msg.peerId);
     });
@@ -510,6 +555,8 @@ async function quickJoin(code){
       let msg; try{msg=JSON.parse(raw);}catch{return;}
       if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(pid,msg.name); }
       if(msg.type==='cam-status') updateRemoteTileAvatar(pid, msg.cam);
+      if(msg.type==='emoji-reaction') showEmojiOnTile(msg.from||pid, msg.emoji);
+      if(msg.type==='quality-request') handleQualityRequest(msg.from||pid, msg.quality);
     });
   });
 }
@@ -530,6 +577,8 @@ function quickConnectToPeer(pid){
     let msg; try{msg=JSON.parse(raw);}catch{return;}
     if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(pid,msg.name); }
     if(msg.type==='cam-status') updateRemoteTileAvatar(pid, msg.cam);
+    if(msg.type==='emoji-reaction') showEmojiOnTile(msg.from||pid, msg.emoji);
+    if(msg.type==='quality-request') handleQualityRequest(msg.from||pid, msg.quality);
   });
 }
 
@@ -606,25 +655,31 @@ hostCam.addEventListener('click',toggleCam);
 
 // ── SECURE JOINER HANDLERS ──
 $('#join-process').addEventListener('click', async()=>{
-  const desc=decode(joinOfferIn.value);
-  if(!desc||desc.type!=='offer'){toast('Invalid Meeting PassKey');return;}
-  const pc=createPC('host');
-  const entry={pc,dc:null,stream:null,name:'Host',connected:false,isHostLink:true};
-  pc.ondatachannel=e=>{
-    entry.dc=e.channel;
-    setupDC(e.channel,'host');
-    e.channel.onopen=()=>{ e.channel.send(JSON.stringify({type:'display-name',from:myId,name:myName})); };
-  };
-  peers.set('host',entry);
-  await pc.setRemoteDescription(desc);
-  const answer=await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  joinAnswerOut.value='Gathering network info\u2026';
-  await waitICE(pc);
-  joinAnswerOut.value=encode(pc.localDescription);
-  joinStep1.classList.remove('active');
-  joinStep2.classList.add('active');
-  toast('Response Key ready \u2014 send it back to the host');
+  try {
+    const desc=decode(joinOfferIn.value);
+    if(!desc||desc.type!=='offer'){toast('Invalid Meeting PassKey');return;}
+    const pc=createPC('host');
+    const entry={pc,dc:null,stream:null,name:'Host',connected:false,isHostLink:true};
+    pc.ondatachannel=e=>{
+      // Only use the first data channel (host-link); ignore any others
+      if(entry.dc) return;
+      entry.dc=e.channel;
+      setupDC(e.channel,'host');
+    };
+    peers.set('host',entry);
+    await pc.setRemoteDescription(desc);
+    const answer=await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    joinAnswerOut.value='Gathering network info\u2026';
+    await waitICE(pc);
+    joinAnswerOut.value=encode(pc.localDescription);
+    joinStep1.classList.remove('active');
+    joinStep2.classList.add('active');
+    toast('Response Key ready \u2014 send it back to the host');
+  } catch(e) {
+    console.error('[join-process] Error:', e);
+    toast('Failed to process PassKey: ' + e.message);
+  }
 });
 
 $('#join-copy').addEventListener('click',()=>{ navigator.clipboard.writeText(joinAnswerOut.value).then(()=>toast('Copied! \ud83d\udccb')); });
@@ -673,10 +728,7 @@ function cleanup(){
   ctlScreen.classList.remove('active');
 }
 
-function updatePeerLabel(id,name){ const el=$(`#tile-${id} .tile-name`); if(el)el.textContent=name; }
-function updateRemoteTile(id,stream){ /* placeholder for pre-call stream tracking */ }
-function updateRemoteTileAvatar(id,cam){ /* future: show/hide avatar when cam off */ }
-function removeVideoTile(id){ const t=$(`#tile-${id}`); if(t)t.remove(); }
+// (real implementations are defined below)
 
 // ── Video tiles ──
 function addVideoTile(id,name,stream,isSelf){
@@ -685,16 +737,173 @@ function addVideoTile(id,name,stream,isSelf){
   tile.className='video-tile'+(isSelf?' self':'');
   tile.id=`tile-${id}`;
   const initial=(name||'?')[0].toUpperCase();
-  tile.innerHTML=`
-    <video autoplay ${isSelf?'muted':''} playsinline></video>
-    <div class="tile-label">${name||'Peer'}</div>
-    <div class="tile-avatar ${stream&&stream.getVideoTracks().length>0?'hidden':''}">
-      <div class="avatar-circle"><span class="avatar-initial">${initial}</span></div>
-    </div>`;
+  const hasVid=stream&&stream.getVideoTracks().length>0;
+  // Build tile inner HTML
+  let html=`<video autoplay ${isSelf?'muted':''} playsinline></video>`;
+  html+=`<div class="emoji-container"></div>`;
+  html+=`<div class="tile-avatar ${hasVid?'hidden':''}"><div class="avatar-circle"><span class="avatar-initial">${initial}</span></div></div>`;
+  if(isSelf){
+    html+=`<div class="tile-label">${name||'You'}<span class="edit-hint">✎</span></div>`;
+  } else {
+    html+=`<div class="tile-label">${name||'Peer'}</div>`;
+    html+=`<div class="tile-controls"><div class="tile-ctrl-bar">`;
+    // Mute toggle
+    html+=`<button class="tile-ctrl-btn mute-toggle" title="Mute"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>`;
+    // Volume slider
+    html+=`<input type="range" class="vol-slider" min="0" max="100" value="100" title="Volume">`;
+    // Video toggle
+    html+=`<button class="tile-ctrl-btn vid-toggle" title="Hide Video"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>`;
+    // Quality dropdown
+    html+=`<div class="tile-quality-wrap"><button class="tile-ctrl-btn tile-quality-btn" title="Receive Quality">HD</button>`;
+    html+=`<div class="tile-quality-dd"><button data-rq="high" class="active">HD · Full</button><button data-rq="medium">SD · Medium</button><button data-rq="low">LD · Low</button></div></div>`;
+    html+=`</div></div>`;
+  }
+  tile.innerHTML=html;
   const vid=tile.querySelector('video');
   if(stream) vid.srcObject=stream;
   callGrid.appendChild(tile);
+  // Wire up tile controls
+  if(!isSelf) setupTileControls(tile, id);
+  if(isSelf) setupSelfTileEdit(tile);
   updateGridCount();
+}
+
+function setupTileControls(tile, peerId){
+  const vid=tile.querySelector('video');
+  // Volume slider
+  const vol=tile.querySelector('.vol-slider');
+  if(vol) vol.addEventListener('input',()=>{ vid.volume=vol.value/100; });
+  // Mute toggle
+  const muteBtn=tile.querySelector('.mute-toggle');
+  if(muteBtn) muteBtn.addEventListener('click',()=>{
+    vid.muted=!vid.muted;
+    muteBtn.classList.toggle('off',vid.muted);
+    muteBtn.title=vid.muted?'Unmute':'Mute';
+    if(vid.muted){ vol.value=0; } else { vol.value=100; vid.volume=1; }
+  });
+  // Video toggle (local only)
+  const vidBtn=tile.querySelector('.vid-toggle');
+  if(vidBtn) vidBtn.addEventListener('click',()=>{
+    const hidden=tile.classList.toggle('tile-vid-hidden');
+    vidBtn.classList.toggle('off',hidden);
+    vidBtn.title=hidden?'Show Video':'Hide Video';
+  });
+  // Receive quality dropdown
+  const qBtn=tile.querySelector('.tile-quality-btn');
+  const qDd=tile.querySelector('.tile-quality-dd');
+  if(qBtn&&qDd){
+    qBtn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      qDd.classList.toggle('open');
+    });
+    qDd.querySelectorAll('button').forEach(b=>{
+      b.addEventListener('click',(e)=>{
+        e.stopPropagation();
+        const q=b.dataset.rq;
+        qDd.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active');
+        qBtn.textContent=q==='high'?'HD':q==='medium'?'SD':'LD';
+        qDd.classList.remove('open');
+        // Request peer to lower quality sent to us
+        sendAny(peerId,{type:'quality-request',from:myId,quality:q});
+        toast(`Requested ${q} quality from ${peers.get(peerId)?.name||'peer'}`);
+      });
+    });
+    // Close dropdown when clicking elsewhere
+    document.addEventListener('click',()=>qDd.classList.remove('open'));
+  }
+}
+
+function setupSelfTileEdit(tile){
+  const label=tile.querySelector('.tile-label');
+  label.addEventListener('click',()=>{
+    const inp=document.createElement('input');
+    inp.type='text'; inp.className='tile-name-input';
+    inp.value=myName; inp.maxLength=20;
+    label.style.display='none';
+    tile.appendChild(inp);
+    inp.focus(); inp.select();
+    function finish(){
+      const v=inp.value.trim();
+      if(v&&v!==myName){
+        myName=v;
+        label.childNodes[0].textContent=v;
+        // Broadcast new name to all peers
+        broadcastAny({type:'display-name',from:myId,name:myName});
+        toast('Name updated to '+v);
+      }
+      inp.remove();
+      label.style.display='';
+    }
+    inp.addEventListener('blur',finish);
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter')inp.blur(); if(e.key==='Escape'){inp.value=myName;inp.blur();} });
+  });
+}
+
+// ── Emoji Reactions ──
+function showEmojiOnTile(peerId, emoji){
+  // Map 'local' for self
+  const tileId = peerId===myId ? 'local' : peerId;
+  const tile=$(`#tile-${tileId}`);
+  if(!tile) return;
+  const container=tile.querySelector('.emoji-container');
+  if(!container) return;
+  const el=document.createElement('span');
+  el.className='emoji-float';
+  el.textContent=emoji;
+  // Random horizontal offset
+  el.style.left=`${35+Math.random()*30}%`;
+  container.appendChild(el);
+  el.addEventListener('animationend',()=>el.remove());
+}
+
+function sendReaction(emoji){
+  // Show locally
+  showEmojiOnTile(myId, emoji);
+  // Broadcast to all peers
+  broadcastAny({type:'emoji-reaction',from:myId,emoji});
+}
+
+// ── Quality Control ──
+function getPC(peerId){
+  const p=peers.get(peerId); if(!p)return null;
+  return p.pc||(p.mediaConn&&p.mediaConn.peerConnection)||null;
+}
+
+const QUALITY_PRESETS={
+  high:  {maxBitrate:2500000, scaleResolutionDownBy:1},
+  medium:{maxBitrate:500000,  scaleResolutionDownBy:2},
+  low:   {maxBitrate:150000,  scaleResolutionDownBy:4}
+};
+
+function handleQualityRequest(fromId, quality){
+  const pc=getPC(fromId);
+  if(!pc) return;
+  const sender=pc.getSenders().find(s=>s.track&&s.track.kind==='video');
+  if(!sender) return;
+  applyQualityToSender(sender, quality);
+}
+
+function applyQualityToSender(sender, quality){
+  const preset=QUALITY_PRESETS[quality]||QUALITY_PRESETS.high;
+  try{
+    const params=sender.getParameters();
+    if(!params.encodings||!params.encodings.length) params.encodings=[{}];
+    params.encodings[0].maxBitrate=preset.maxBitrate;
+    if(preset.scaleResolutionDownBy>1) params.encodings[0].scaleResolutionDownBy=preset.scaleResolutionDownBy;
+    else delete params.encodings[0].scaleResolutionDownBy;
+    sender.setParameters(params).catch(e=>console.warn('[Quality]',e));
+  }catch(e){console.warn('[Quality]',e);}
+}
+
+function setSendQuality(quality){
+  sendQuality=quality;
+  peers.forEach(p=>{
+    const pc=p.pc||(p.mediaConn&&p.mediaConn.peerConnection);
+    if(!pc) return;
+    const sender=pc.getSenders().find(s=>s.track&&s.track.kind==='video');
+    if(sender) applyQualityToSender(sender, quality);
+  });
 }
 
 function removeVideoTile(id){
@@ -737,11 +946,58 @@ function updatePeerLabel(peerId,name){
   if(isHost) updateHostUI();
 }
 
+
 // ── Call controls ──
 ctlMic.addEventListener('click',toggleMic);
 ctlCam.addEventListener('click',toggleCam);
 ctlEnd.addEventListener('click',endCall);
 ctlFull.addEventListener('click',()=>{ if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen(); });
+
+// Emoji picker
+ctlEmoji.addEventListener('click',(e)=>{
+  e.stopPropagation();
+  sqPanel.classList.add('hidden');
+  emojiPicker.classList.toggle('hidden');
+  ctlEmoji.classList.toggle('active',!emojiPicker.classList.contains('hidden'));
+  ctlSendQ.classList.remove('active');
+});
+emojiPicker.querySelectorAll('.emoji-pick-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    sendReaction(btn.dataset.emoji);
+    emojiPicker.classList.add('hidden');
+    ctlEmoji.classList.remove('active');
+  });
+});
+
+// Send quality panel
+ctlSendQ.addEventListener('click',(e)=>{
+  e.stopPropagation();
+  emojiPicker.classList.add('hidden');
+  sqPanel.classList.toggle('hidden');
+  ctlSendQ.classList.toggle('active',!sqPanel.classList.contains('hidden'));
+  ctlEmoji.classList.remove('active');
+});
+sqPanel.querySelectorAll('.sq-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    sqPanel.querySelectorAll('.sq-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    setSendQuality(btn.dataset.sq);
+    sqPanel.classList.add('hidden');
+    ctlSendQ.classList.remove('active');
+    toast('Send quality: '+btn.textContent.trim());
+  });
+});
+
+// Close popups on outside click
+document.addEventListener('click',()=>{
+  emojiPicker.classList.add('hidden');
+  sqPanel.classList.add('hidden');
+  ctlEmoji.classList.remove('active');
+  ctlSendQ.classList.remove('active');
+});
+// Prevent popup click from closing
+emojiPicker.addEventListener('click',e=>e.stopPropagation());
+sqPanel.addEventListener('click',e=>e.stopPropagation());
 
 // Screen share
 ctlScreen.addEventListener('click',async()=>{

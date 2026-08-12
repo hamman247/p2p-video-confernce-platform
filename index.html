@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=2" />
 </head>
 <body>
 
@@ -216,12 +216,28 @@
     <div class="call-bar">
       <div class="call-bar-inner">
         <div class="call-info"><span id="call-timer">00:00</span><span class="call-separator">·</span><span class="call-label-p2p">Mesh P2P</span><span class="call-separator">·</span><span id="call-count">1</span> in call</div>
-        <div class="call-controls">
-          <button id="ctl-mic" class="control-btn active" title="Mic"><svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.13 1.49-.35 2.17"/></svg></button>
-          <button id="ctl-cam" class="control-btn active" title="Camera"><svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg><svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg></button>
-          <button id="ctl-screen" class="control-btn" title="Screen"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></button>
-          <button id="ctl-add" class="control-btn" title="Add Participant" style="display:none"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></button>
-          <button id="ctl-end" class="control-btn btn-danger" title="End"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.11 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91"/></svg></button>
+        <div class="call-controls-wrap">
+          <div class="call-controls">
+            <button id="ctl-mic" class="control-btn active" title="Mic"><svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.13 1.49-.35 2.17"/></svg></button>
+            <button id="ctl-cam" class="control-btn active" title="Camera"><svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg><svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg></button>
+            <button id="ctl-screen" class="control-btn" title="Screen"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></button>
+            <button id="ctl-emoji" class="control-btn" title="React"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
+            <button id="ctl-send-q" class="control-btn" title="Send Quality"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="14" width="4" height="7" rx="1"/><rect x="10" y="9" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="17" rx="1"/></svg></button>
+            <button id="ctl-add" class="control-btn" title="Add Participant" style="display:none"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></button>
+            <button id="ctl-end" class="control-btn btn-danger" title="End"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.11 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91"/></svg></button>
+          </div>
+          <!-- Emoji Picker -->
+          <div id="emoji-picker" class="emoji-picker hidden">
+            <button class="emoji-pick-btn" data-emoji="👍">👍</button><button class="emoji-pick-btn" data-emoji="❤️">❤️</button><button class="emoji-pick-btn" data-emoji="😂">😂</button><button class="emoji-pick-btn" data-emoji="😮">😮</button><button class="emoji-pick-btn" data-emoji="👏">👏</button>
+            <button class="emoji-pick-btn" data-emoji="🎉">🎉</button><button class="emoji-pick-btn" data-emoji="🔥">🔥</button><button class="emoji-pick-btn" data-emoji="💯">💯</button><button class="emoji-pick-btn" data-emoji="✋">✋</button><button class="emoji-pick-btn" data-emoji="💀">💀</button>
+          </div>
+          <!-- Send Quality Panel -->
+          <div id="sq-panel" class="sq-panel hidden">
+            <div class="sq-title">Send Quality</div>
+            <button class="sq-btn active" data-sq="high">HD <span class="sq-bps">2.5 Mbps</span></button>
+            <button class="sq-btn" data-sq="medium">SD <span class="sq-bps">500 Kbps</span></button>
+            <button class="sq-btn" data-sq="low">LD <span class="sq-bps">150 Kbps</span></button>
+          </div>
         </div>
         <div class="call-actions-right"><button id="ctl-full" class="control-btn" title="Fullscreen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></div>
       </div>
