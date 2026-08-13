@@ -32,7 +32,7 @@
       <div class="mode-cards">
         <div class="mode-card">
           <div class="mode-header"><span class="mode-icon">⚡</span><h3>Quick Connect</h3></div>
-          <p class="mode-desc">Share a short room code. Auto-connects via PeerJS signaling. Media stays direct P2P.</p>
+          <p class="mode-desc">Share a link. Auto-connects via PeerJS relay. Media stays direct P2P.</p>
           <div class="mode-btns">
             <button id="btn-quick-host" class="btn btn-primary btn-sm">Host</button>
             <button id="btn-quick-join" class="btn btn-secondary btn-sm">Join</button>
@@ -78,15 +78,17 @@
       </div>
       <div class="setup-panel">
         <h2>Quick Room</h2>
-        <p class="step-desc">Share this room code or link. Participants connect automatically.</p>
-        <div class="room-code-display"><span id="qh-room-code">------</span></div>
-        <div class="btn-row" style="margin-bottom:var(--sp-4)">
-          <button id="qh-copy-link" class="btn btn-primary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Copy Link</button>
-          <button id="qh-copy-code" class="btn btn-secondary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Code</button>
+        <p class="step-desc">Share this link or PassKey. The participant's response is sent back automatically via PeerJS relay.</p>
+        <div class="sdp-field">
+          <textarea id="qh-offer-out" readonly rows="3">Generating…</textarea>
+          <div class="btn-row">
+            <button id="qh-copy-link" class="btn btn-primary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Copy Link</button>
+            <button id="qh-copy-key" class="btn btn-secondary btn-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy PassKey</button>
+          </div>
         </div>
         <div id="qh-participant-list" class="participant-list"></div>
         <p class="participant-count"><span id="qh-count">1</span>/6 participants</p>
-        <div id="qh-status" class="lobby-status"><div class="pulse-dot"></div><span>Waiting for participants…</span></div>
+        <div id="qh-status" class="lobby-status"><div class="pulse-dot"></div><span>Waiting for participant to open link…</span></div>
         <button id="qh-enter-call" class="btn btn-primary full-width" disabled style="margin-top:var(--sp-4)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg> Enter Call</button>
         <button id="qh-back" class="btn btn-ghost">← Back to start</button>
       </div>
@@ -106,10 +108,17 @@
       </div>
       <div class="setup-panel">
         <h2>Join Room</h2>
-        <p class="step-desc">Enter the room code shared by the host.</p>
-        <div class="room-code-input"><input type="text" id="qj-code-input" placeholder="Enter room code" maxlength="6" autocomplete="off" spellcheck="false" /></div>
-        <button id="qj-connect" class="btn btn-primary full-width" style="margin-top:var(--sp-3)">Connect</button>
-        <div id="qj-status" class="lobby-status" style="margin-top:var(--sp-4);display:none"><div class="pulse-dot"></div><span>Connecting…</span></div>
+        <div id="qj-step1" class="setup-step active">
+          <p class="step-desc">Paste the Meeting PassKey shared by the host.</p>
+          <div class="sdp-field">
+            <textarea id="qj-offer-in" rows="4" placeholder="Paste Meeting PassKey here…"></textarea>
+            <button id="qj-connect" class="btn btn-primary full-width">Connect</button>
+          </div>
+        </div>
+        <div id="qj-step2" class="setup-step">
+          <div id="qj-status" class="lobby-status"><div class="pulse-dot"></div><span>Connecting…</span></div>
+          <button id="qj-enter-call" class="btn btn-primary full-width" style="display:none;margin-top:var(--sp-3)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.6 11.6L22 7v10l-6.4-4.5"/><rect x="2" y="7" width="15" height="10" rx="2" ry="2"/></svg> Enter Call</button>
+        </div>
         <button id="qj-back" class="btn btn-ghost" style="margin-top:var(--sp-3)">← Back to start</button>
       </div>
     </div>

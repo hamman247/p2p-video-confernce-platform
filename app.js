@@ -40,10 +40,11 @@ const addStepOffer=$('#add-step-offer'), addStepAnswer=$('#add-step-answer');
 
 // Quick Connect refs
 const qhPreview=$('#qh-preview'), qhPreviewOff=$('#qh-preview-off');
-const qhRoomCode=$('#qh-room-code'), qhPartList=$('#qh-participant-list'), qhCount=$('#qh-count');
+const qhOfferOut=$('#qh-offer-out'), qhPartList=$('#qh-participant-list'), qhCount=$('#qh-count');
 const qhStatus=$('#qh-status'), qhEnterCall=$('#qh-enter-call');
 const qjPreview=$('#qj-preview'), qjPreviewOff=$('#qj-preview-off');
-const qjCodeInput=$('#qj-code-input'), qjStatus=$('#qj-status');
+const qjOfferIn=$('#qj-offer-in'), qjStatus=$('#qj-status');
+const qjStep1=$('#qj-step1'), qjStep2=$('#qj-step2'), qjEnterCall=$('#qj-enter-call');
 
 // ── State ──
 const myId = crypto.randomUUID().slice(0,8);
@@ -55,8 +56,6 @@ let micOn = true, camOn = true;
 let timerInterval = null, callSeconds = 0;
 let inCall = false;
 let pendingPC = null; // PC being set up during manual exchange
-let myPeer = null; // PeerJS instance (quick mode)
-let roomCode = '';
 
 const peers = new Map();
 const MAX_PEERS = 6;
@@ -80,13 +79,24 @@ function sendAny(peerId, msg){
   else if(p.dataConn&&p.dataConn.open) p.dataConn.send(s);
 }
 
-function genRoomCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<6;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
+
 
 // ── Helpers ──
 function toast(m,ms=3000){ toastMsg.textContent=m; toastEl.classList.remove('hidden'); clearTimeout(toastEl._t); toastEl._t=setTimeout(()=>toastEl.classList.add('hidden'),ms); }
 function fmtTime(s){ return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 function encode(d){ return btoa(JSON.stringify(d)); }
-function decode(s){ try{ return new RTCSessionDescription(JSON.parse(atob(s.trim()))); }catch{ return null; } }
+function decode(s){
+  try{
+    const obj=JSON.parse(atob(s.trim()));
+    // New format: {sdp:{type,sdp}, relay:'peerjs-id'}
+    if(obj.sdp&&obj.relay) return {desc:new RTCSessionDescription(obj.sdp), relay:obj.relay};
+    // Old format: plain SDP object
+    return {desc:new RTCSessionDescription(obj), relay:null};
+  }catch{ return {desc:null,relay:null}; }
+}
+function encodeOffer(sdp, relayId){
+  return btoa(JSON.stringify({sdp, relay:relayId}));
+}
 function waitICE(pc){ return new Promise(r=>{ if(pc.iceGatheringState==='complete'){r();return;} const t=setTimeout(r,6000); pc.addEventListener('icegatheringstatechange',()=>{ if(pc.iceGatheringState==='complete'){clearTimeout(t);r();} }); }); }
 function setOfferURL(b64){ const u=new URL(window.location); u.searchParams.set('offer',b64); history.replaceState(null,'',u); }
 function clearOfferURL(){ const u=new URL(window.location); u.searchParams.delete('offer'); history.replaceState(null,'',u); }
@@ -327,21 +337,58 @@ function setExchState(which){
   which.classList.add('active');
 }
 
-async function hostGenOffer(){
+let answerRelay = null; // temporary PeerJS peer for receiving answers
+
+async function hostGenOffer(withRelay=false){
   try {
-    const peerId = crypto.randomUUID().slice(0,8); // placeholder until joiner tells us theirs
+    const peerId = crypto.randomUUID().slice(0,8);
     const pc = createPC(peerId);
     const dc = pc.createDataChannel('host-link');
     const entry = { pc, dc, stream:null, name:'Pending…', connected:false, isHostLink:true, tempId:peerId };
-    // When joiner sends display-name, we'll know their real ID and name
     setupDC(dc, peerId);
-    // ICE candidates for manual exchange: wait for gathering
     peers.set(peerId, entry);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     await waitICE(pc);
     pendingPC = peerId;
-    return encode(pc.localDescription);
+
+    if(!withRelay) return encode(pc.localDescription);
+
+    // Create temporary PeerJS relay to receive the answer automatically
+    const relayId = 'mm-' + crypto.randomUUID().slice(0,12);
+    try {
+      answerRelay = new Peer(relayId, {config:RTC_CFG});
+      await new Promise((resolve,reject) => {
+        answerRelay.on('open', resolve);
+        answerRelay.on('error', reject);
+        setTimeout(()=>reject(new Error('timeout')), 8000);
+      });
+      answerRelay.on('connection', conn => {
+        conn.on('data', async raw => {
+          try {
+            const msg = JSON.parse(raw);
+            if(msg.type==='sdp-answer' && msg.answer){
+              console.log('[Relay] Received answer automatically');
+              const ok = await hostProcessAnswer(msg.answer);
+              if(ok){
+                // Update Quick Host UI
+                updateQuickHostUI();
+                // Close add-overlay if open
+                const ov=$('#add-overlay'); if(ov&&!ov.classList.contains('hidden')) ov.classList.add('hidden');
+                clearOfferURL();
+              }
+            }
+          } catch(e){ console.warn('[Relay] Bad message:', e); }
+        });
+      });
+      console.log('[Relay] Listening on', relayId);
+      return encodeOffer(pc.localDescription, relayId);
+    } catch(e) {
+      console.warn('[Relay] PeerJS relay unavailable, manual exchange only:', e.message);
+      if(answerRelay){try{answerRelay.destroy();}catch{}}
+      answerRelay = null;
+      return encode(pc.localDescription);
+    }
   } catch(e) {
     console.error('[hostGenOffer] Error:', e);
     toast('Failed to generate PassKey: ' + e.message);
@@ -351,13 +398,15 @@ async function hostGenOffer(){
 
 async function hostProcessAnswer(b64){
   try {
-    const desc = decode(b64);
+    const {desc} = decode(b64);
     if(!desc||desc.type!=='answer'){ toast('Invalid answer'); return false; }
     const p = peers.get(pendingPC);
     if(!p){ toast('No pending connection'); return false; }
     await p.pc.setRemoteDescription(desc);
     setExchState(exchIdle);
     pendingPC=null;
+    // Cleanup relay
+    if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null;}
     toast('Participant connected!');
     return true;
   } catch(e) {
@@ -368,10 +417,8 @@ async function hostProcessAnswer(b64){
 }
 
 // ══════════════════════════════════════
-// ── QUICK CONNECT (PeerJS) ──
+// ── QUICK CONNECT (SDP + PeerJS Relay) ──
 // ══════════════════════════════════════
-
-function quickRoomLink(code){ const u=new URL(window.location); u.search=''; u.searchParams.set('room',code); return u.toString(); }
 
 function updateQuickHostUI(){
   qhPartList.innerHTML='<div class="participant-item self"><span class="participant-dot online"></span><span class="participant-name">You ('+myName+')</span></div>';
@@ -388,198 +435,12 @@ function updateQuickHostUI(){
   if(cnt>=2){ qhStatus.classList.add('connected'); qhStatus.querySelector('span').textContent=cnt-1+' participant(s) connected'; }
 }
 
-function setupQuickPeerHandlers(peer, peerId, entry){
-  // Data connection
-  function handleDataConn(conn){
-    entry.dataConn=conn;
-    conn.on('open',()=>{ conn.send(JSON.stringify({type:'display-name',name:myName,peerId:myPeer.id})); });
-    conn.on('data', raw=>{
-      let msg; try{msg=JSON.parse(raw);}catch{return;}
-      if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(peerId,msg.name); if(isHost)updateQuickHostUI(); }
-      if(msg.type==='cam-status') updateRemoteTileAvatar(peerId, msg.cam);
-      if(msg.type==='emoji-reaction') showEmojiOnTile(msg.from||peerId, msg.emoji);
-      if(msg.type==='quality-request') handleQualityRequest(msg.from||peerId, msg.quality);
-    });
-  }
-  // If we initiated the data connection
-  if(entry.dataConn) handleDataConn(entry.dataConn);
-  // If they connect to us
-  peer.on('connection', conn=>{ if(!entry.dataConn) handleDataConn(conn); });
-}
-
-// Quick Host
 async function quickHost(){
-  roomCode=genRoomCode();
-  return new Promise((resolve)=>{
-    function tryCreate(code, attempt){
-      if(myPeer){try{myPeer.destroy();}catch{}}
-      myPeer=new Peer(code,{config:RTC_CFG});
-      myPeer.on('error',e=>{
-        if(e.type==='unavailable-id' && attempt<3){
-          // ID taken on PeerJS server, try another code
-          roomCode=genRoomCode();
-          toast('Room code taken, trying another…');
-          tryCreate(roomCode, attempt+1);
-          return;
-        }
-        toast('PeerJS error: '+e.type);
-        console.error(e);
-      });
-      myPeer.on('open',id=>{
-        roomCode=id; // Ensure we use the actual registered ID
-        qhRoomCode.textContent=id;
-        const u=new URL(window.location); u.search=''; u.searchParams.set('room',id); history.replaceState(null,'',u);
-        toast('Room created! Share the code or link.');
-        setupHostListeners();
-        resolve();
-      });
-    }
-    function setupHostListeners(){
-      // Incoming calls (joiners)
-      myPeer.on('call', call=>{
-        const pid=call.peer;
-        call.answer(localStream);
-        let entry=peers.get(pid);
-        if(!entry){ entry={dataConn:null,mediaConn:call,stream:null,name:'Peer',connected:false}; peers.set(pid,entry); }
-        else { entry.mediaConn=call; }
-        call.on('stream', s=>{ entry.stream=s; entry.connected=true; updateRemoteTile(pid,s); updateQuickHostUI(); if(inCall)addVideoTile(pid,entry.name,s); });
-        call.on('close',()=>onQuickPeerLeft(pid));
-        // Tell new joiner about all existing peers
-        setTimeout(()=>{
-          const peerIds=[...peers.keys()].filter(k=>k!==pid&&peers.get(k).connected);
-          if(entry.dataConn&&entry.dataConn.open) entry.dataConn.send(JSON.stringify({type:'peer-list',peers:peerIds}));
-          peers.forEach((p,k)=>{ if(k!==pid&&p.connected&&p.dataConn&&p.dataConn.open) p.dataConn.send(JSON.stringify({type:'new-peer',peerId:pid})); });
-        },1000);
-      });
-      // Incoming data connections
-      myPeer.on('connection', conn=>{
-        const pid=conn.peer;
-        let entry=peers.get(pid);
-        if(!entry){ entry={dataConn:conn,mediaConn:null,stream:null,name:'Peer',connected:false}; peers.set(pid,entry); }
-        else { entry.dataConn=conn; }
-        conn.on('open',()=>{ conn.send(JSON.stringify({type:'display-name',name:myName,peerId:myPeer.id})); });
-        conn.on('data', raw=>{
-          let msg; try{msg=JSON.parse(raw);}catch{return;}
-          if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(pid,msg.name); updateQuickHostUI(); }
-          if(msg.type==='cam-status') updateRemoteTileAvatar(pid, msg.cam);
-          if(msg.type==='emoji-reaction') showEmojiOnTile(msg.from||pid, msg.emoji);
-          if(msg.type==='quality-request') handleQualityRequest(msg.from||pid, msg.quality);
-        });
-      });
-    }
-    tryCreate(roomCode, 0);
-  });
-}
-
-function onQuickPeerLeft(pid){
-  const p=peers.get(pid); if(!p)return;
-  toast((p.name||'Peer')+' left');
-  peers.delete(pid); removeVideoTile(pid); updateGridCount();
-  if(isHost) updateQuickHostUI();
-}
-
-// Quick Join — with retry logic
-let quickJoinRetries=0;
-const MAX_JOIN_RETRIES=3;
-
-async function quickJoin(code){
-  if(myPeer){try{myPeer.destroy();}catch{}}
-  peers.clear();
-  myPeer=new Peer(undefined,{config:RTC_CFG});
-
-  myPeer.on('error',e=>{
-    console.error('PeerJS error:',e);
-    if(e.type==='peer-unavailable' && quickJoinRetries<MAX_JOIN_RETRIES){
-      quickJoinRetries++;
-      qjStatus.querySelector('span').textContent='Room not found, retrying ('+quickJoinRetries+'/'+MAX_JOIN_RETRIES+')…';
-      setTimeout(()=>quickJoin(code), 2000);
-      return;
-    }
-    if(e.type==='peer-unavailable'){
-      toast('Room not found. Check the code and make sure the host is online.');
-      qjStatus.querySelector('span').textContent='Room not found. Verify the code and try again.';
-      qjStatus.classList.remove('connected');
-    } else {
-      toast('Connection error: '+e.type);
-    }
-  });
-
-  myPeer.on('open',()=>{
-    qjStatus.querySelector('span').textContent='Connecting to room '+code+'…';
-    // Connect data channel to host
-    const dc=myPeer.connect(code,{reliable:true});
-    const entry={dataConn:dc,mediaConn:null,stream:null,name:'Host',connected:false};
-    peers.set(code,entry);
-    dc.on('open',()=>{
-      quickJoinRetries=0; // Reset retries on success
-      dc.send(JSON.stringify({type:'display-name',name:myName,peerId:myPeer.id}));
-      // Call host with our stream
-      const call=myPeer.call(code,localStream);
-      entry.mediaConn=call;
-      call.on('stream', s=>{
-        entry.stream=s; entry.connected=true; updateRemoteTile(code,s);
-        toast('Connected to host!');
-        qjStatus.style.display=''; qjStatus.classList.add('connected');
-        qjStatus.querySelector('span').textContent='Connected! Entering call…';
-        setTimeout(()=>enterCall(),1500);
-      });
-      call.on('close',()=>onQuickPeerLeft(code));
-    });
-    dc.on('data', raw=>{
-      let msg; try{msg=JSON.parse(raw);}catch{return;}
-      if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(code,msg.name); }
-      if(msg.type==='cam-status') updateRemoteTileAvatar(code, msg.cam);
-      if(msg.type==='emoji-reaction') showEmojiOnTile(msg.from||code, msg.emoji);
-      if(msg.type==='quality-request') handleQualityRequest(msg.from||code, msg.quality);
-      if(msg.type==='peer-list') (msg.peers||[]).forEach(pid=>quickConnectToPeer(pid));
-      if(msg.type==='new-peer') quickConnectToPeer(msg.peerId);
-    });
-  });
-  // Accept incoming calls from other peers in the mesh
-  myPeer.on('call', call=>{
-    const pid=call.peer;
-    call.answer(localStream);
-    let entry=peers.get(pid);
-    if(!entry){ entry={dataConn:null,mediaConn:call,stream:null,name:'Peer',connected:false}; peers.set(pid,entry); }
-    else { entry.mediaConn=call; }
-    call.on('stream', s=>{ entry.stream=s; entry.connected=true; updateRemoteTile(pid,s); if(inCall)addVideoTile(pid,entry.name,s); });
-    call.on('close',()=>onQuickPeerLeft(pid));
-  });
-  myPeer.on('connection', conn=>{
-    const pid=conn.peer;
-    let entry=peers.get(pid);
-    if(!entry){ entry={dataConn:conn,mediaConn:null,stream:null,name:'Peer',connected:false}; peers.set(pid,entry); }
-    else { entry.dataConn=conn; }
-    conn.on('open',()=>{ conn.send(JSON.stringify({type:'display-name',name:myName,peerId:myPeer.id})); });
-    conn.on('data', raw=>{
-      let msg; try{msg=JSON.parse(raw);}catch{return;}
-      if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(pid,msg.name); }
-      if(msg.type==='cam-status') updateRemoteTileAvatar(pid, msg.cam);
-      if(msg.type==='emoji-reaction') showEmojiOnTile(msg.from||pid, msg.emoji);
-      if(msg.type==='quality-request') handleQualityRequest(msg.from||pid, msg.quality);
-    });
-  });
-}
-
-function quickConnectToPeer(pid){
-  if(peers.has(pid)||pid===myPeer.id) return;
-  const dc=myPeer.connect(pid,{reliable:true});
-  const entry={dataConn:dc,mediaConn:null,stream:null,name:'Peer',connected:false};
-  peers.set(pid,entry);
-  dc.on('open',()=>{
-    dc.send(JSON.stringify({type:'display-name',name:myName,peerId:myPeer.id}));
-    const call=myPeer.call(pid,localStream);
-    entry.mediaConn=call;
-    call.on('stream', s=>{ entry.stream=s; entry.connected=true; updateRemoteTile(pid,s); if(inCall)addVideoTile(pid,entry.name,s); });
-    call.on('close',()=>onQuickPeerLeft(pid));
-  });
-  dc.on('data', raw=>{
-    let msg; try{msg=JSON.parse(raw);}catch{return;}
-    if(msg.type==='display-name'){ entry.name=msg.name; updatePeerLabel(pid,msg.name); }
-    if(msg.type==='cam-status') updateRemoteTileAvatar(pid, msg.cam);
-    if(msg.type==='emoji-reaction') showEmojiOnTile(msg.from||pid, msg.emoji);
-    if(msg.type==='quality-request') handleQualityRequest(msg.from||pid, msg.quality);
-  });
+  const b64 = await hostGenOffer(true); // with PeerJS relay
+  qhOfferOut.value = b64;
+  setOfferURL(b64);
+  toast('PassKey ready — share the link!');
+  updateQuickHostUI();
 }
 
 // ══════════════════════════════════════
@@ -591,28 +452,32 @@ $('#btn-quick-host').addEventListener('click', async()=>{
   myName=inputName.value.trim()||'Host'; isHost=true; connectMode='quick';
   showView('quick-host');
   await acquireMedia(); attachPreview(qhPreview, qhPreviewOff);
-  await quickHost(); updateQuickHostUI();
+  await quickHost();
 });
 $('#btn-quick-join').addEventListener('click', async()=>{
   myName=inputName.value.trim()||'Guest'; isHost=false; connectMode='quick';
   showView('quick-join');
   await acquireMedia(); attachPreview(qjPreview, qjPreviewOff);
 });
-$('#qh-copy-link').addEventListener('click',()=>{ navigator.clipboard.writeText(quickRoomLink(roomCode)).then(()=>toast('Link copied! \ud83d\udd17')); });
-$('#qh-copy-code').addEventListener('click',()=>{ navigator.clipboard.writeText(roomCode).then(()=>toast('Code copied! \ud83d\udccb')); });
-qhEnterCall.addEventListener('click',()=>enterCall());
-$('#qh-back').addEventListener('click',()=>{ cleanup(); clearOfferURL(); showView('landing'); });
+$('#qh-copy-link').addEventListener('click',()=>{ navigator.clipboard.writeText(getOfferLink(qhOfferOut.value)).then(()=>toast('Link copied! \ud83d\udd17')); });
+$('#qh-copy-key').addEventListener('click',()=>{ navigator.clipboard.writeText(qhOfferOut.value).then(()=>toast('PassKey copied! \ud83d\udccb')); });
+qhEnterCall.addEventListener("click",()=>enterCall());
+$('#qh-back').addEventListener('click',()=>{ cleanup(); clearOfferURL(); if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null;} showView('landing'); });
 $('#qh-mic').addEventListener('click',toggleMic);
 $('#qh-cam').addEventListener('click',toggleCam);
 $('#qj-connect').addEventListener('click',async()=>{
-  const code=qjCodeInput.value.trim().toUpperCase();
-  if(code.length<4){toast('Enter the room code');return;}
-  quickJoinRetries=0;
-  qjStatus.style.display='';
-  qjStatus.querySelector('span').textContent='Connecting…';
-  await quickJoin(code);
+  const val=qjOfferIn.value.trim();
+  if(!val){toast('Paste the Meeting PassKey');return;}
+  qjStep1.classList.remove('active'); qjStep2.classList.add('active');
+  qjStatus.querySelector('span').textContent='Processing & connecting…';
+  try { await joinerProcessOffer(val); } catch(e){
+    console.error('[qj-connect]',e);
+    toast('Failed: '+e.message);
+    qjStep2.classList.remove('active'); qjStep1.classList.add('active');
+  }
 });
-$('#qj-back').addEventListener('click',()=>{ cleanup(); showView('landing'); });
+qjEnterCall.addEventListener("click",()=>enterCall());
+$('#qj-back').addEventListener('click',()=>{ cleanup(); qjStep2.classList.remove('active'); qjStep1.classList.add('active'); if(qjOfferIn)qjOfferIn.value=''; showView('landing'); });
 $('#qj-mic').addEventListener('click',toggleMic);
 $('#qj-cam').addEventListener('click',toggleCam);
 
@@ -646,6 +511,7 @@ $('#host-next-step').addEventListener('click',()=>{ setExchState(exchAnswer); ho
 $('#host-connect-peer').addEventListener('click',async()=>{ await hostProcessAnswer(hostAnswerIn.value); });
 $('#host-cancel-exch').addEventListener('click',()=>{
   if(pendingPC){ const p=peers.get(pendingPC); if(p&&p.pc)p.pc.close(); peers.delete(pendingPC); pendingPC=null; }
+  if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null;}
   setExchState(exchIdle);
 });
 btnEnterCall.addEventListener('click',()=>enterCall());
@@ -654,28 +520,59 @@ hostMic.addEventListener('click',toggleMic);
 hostCam.addEventListener('click',toggleCam);
 
 // ── SECURE JOINER HANDLERS ──
+async function joinerProcessOffer(offerB64){
+  const {desc, relay} = decode(offerB64);
+  if(!desc||desc.type!=='offer'){toast('Invalid Meeting PassKey');return;}
+  const pc=createPC('host');
+  const entry={pc,dc:null,stream:null,name:'Host',connected:false,isHostLink:true};
+  pc.ondatachannel=e=>{
+    if(entry.dc) return;
+    entry.dc=e.channel;
+    setupDC(e.channel,'host');
+  };
+  peers.set('host',entry);
+  await pc.setRemoteDescription(desc);
+  const answer=await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  joinAnswerOut.value='Gathering network info\u2026';
+  await waitICE(pc);
+  const answerB64 = encode(pc.localDescription);
+  joinAnswerOut.value=answerB64;
+  joinStep1.classList.remove('active');
+  joinStep2.classList.add('active');
+
+  // Auto-relay answer back to host if relay ID is present
+  if(relay){
+    toast('Sending Response Key to host automatically\u2026');
+    try {
+      const relayPeer = new Peer(undefined, {config:RTC_CFG});
+      await new Promise((resolve,reject)=>{
+        relayPeer.on('open', resolve);
+        relayPeer.on('error', reject);
+        setTimeout(()=>reject(new Error('timeout')), 8000);
+      });
+      const conn = relayPeer.connect(relay, {reliable:true});
+      await new Promise((resolve,reject)=>{
+        conn.on('open', resolve);
+        conn.on('error', reject);
+        setTimeout(()=>reject(new Error('timeout')), 8000);
+      });
+      conn.send(JSON.stringify({type:'sdp-answer', answer:answerB64}));
+      toast('Response Key sent automatically! Connecting\u2026');
+      // Clean up after a short delay to ensure delivery
+      setTimeout(()=>{try{relayPeer.destroy();}catch{}}, 3000);
+    } catch(e) {
+      console.warn('[Relay] Auto-send failed, manual exchange still works:', e.message);
+      toast('Auto-relay unavailable \u2014 copy Response Key manually');
+    }
+  } else {
+    toast('Response Key ready \u2014 send it back to the host');
+  }
+}
+
 $('#join-process').addEventListener('click', async()=>{
   try {
-    const desc=decode(joinOfferIn.value);
-    if(!desc||desc.type!=='offer'){toast('Invalid Meeting PassKey');return;}
-    const pc=createPC('host');
-    const entry={pc,dc:null,stream:null,name:'Host',connected:false,isHostLink:true};
-    pc.ondatachannel=e=>{
-      // Only use the first data channel (host-link); ignore any others
-      if(entry.dc) return;
-      entry.dc=e.channel;
-      setupDC(e.channel,'host');
-    };
-    peers.set('host',entry);
-    await pc.setRemoteDescription(desc);
-    const answer=await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    joinAnswerOut.value='Gathering network info\u2026';
-    await waitICE(pc);
-    joinAnswerOut.value=encode(pc.localDescription);
-    joinStep1.classList.remove('active');
-    joinStep2.classList.add('active');
-    toast('Response Key ready \u2014 send it back to the host');
+    await joinerProcessOffer(joinOfferIn.value);
   } catch(e) {
     console.error('[join-process] Error:', e);
     toast('Failed to process PassKey: ' + e.message);
@@ -703,7 +600,7 @@ function enterCall(){
   callSeconds=0; callTimer.textContent='00:00';
   timerInterval=setInterval(()=>{callSeconds++;callTimer.textContent=fmtTime(callSeconds);},1000);
   // Show add button for host
-  if(isHost && connectMode==='secure') ctlAdd.style.display='';
+  if(isHost) ctlAdd.style.display='';
   toast('Connected! 🎉 Full mesh P2P established.');
 }
 
@@ -712,7 +609,6 @@ function endCall(){
   if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
   cleanup();
   clearOfferURL();
-  const u=new URL(window.location); u.searchParams.delete('room'); history.replaceState(null,'',u);
   showView('landing');
   toast('Call ended');
 }
@@ -720,7 +616,7 @@ function endCall(){
 function cleanup(){
   peers.forEach((p)=>{ if(p.pc)try{p.pc.close();}catch{} if(p.mediaConn)try{p.mediaConn.close();}catch{} if(p.dataConn)try{p.dataConn.close();}catch{} });
   peers.clear();
-  if(myPeer){try{myPeer.destroy();}catch{}myPeer=null;}
+  if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null;}
   if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
   if(screenStream){screenStream.getTracks().forEach(t=>t.stop());screenStream=null;}
   callGrid.innerHTML='';
@@ -1035,7 +931,7 @@ ctlAdd.addEventListener('click',async()=>{
   addOverlay.classList.remove('hidden');
   addStepOffer.classList.add('active'); addStepAnswer.classList.remove('active');
   addOfferOut.value='Generating…'; addAnswerIn.value='';
-  const b64=await hostGenOffer();
+  const b64=await hostGenOffer(connectMode==='quick');
   addOfferOut.value=b64;
   setOfferURL(b64);
 });
@@ -1043,6 +939,7 @@ $('#add-overlay-close').addEventListener('click',()=>{
   addOverlay.classList.add('hidden');
   clearOfferURL();
   if(pendingPC){const p=peers.get(pendingPC);if(p&&p.pc)p.pc.close();peers.delete(pendingPC);pendingPC=null;}
+  if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null;}
 });
 $('#add-copy-offer').addEventListener('click',()=>{ navigator.clipboard.writeText(addOfferOut.value).then(()=>toast('Offer copied! 📋')); });
 $('#add-copy-link').addEventListener('click',()=>{ navigator.clipboard.writeText(getOfferLink(addOfferOut.value)).then(()=>toast('Link copied! 🔗')); });
@@ -1055,28 +952,39 @@ $('#add-connect').addEventListener('click',async()=>{
 // ── Auto-join from URL ──
 (function checkURL(){
   const params = new URLSearchParams(window.location.search);
-  const room = params.get('room');
   const offerB64 = params.get('offer');
-  if(room){
-    setTimeout(async()=>{
-      myName = inputName.value.trim() || 'Guest';
-      isHost = false; connectMode = 'quick';
+  if(!offerB64) return;
+
+  // Decode to check for relay — determines quick vs secure
+  const {relay} = decode(offerB64);
+
+  setTimeout(async()=>{
+    myName = inputName.value.trim() || 'Guest';
+    isHost = false;
+
+    if(relay){
+      // Quick Connect — auto-process and auto-relay
+      connectMode = 'quick';
       showView('quick-join');
       await acquireMedia(); attachPreview(qjPreview, qjPreviewOff);
-      qjCodeInput.value = room;
-      qjStatus.style.display='';
-      await quickJoin(room);
-    }, 300);
-  } else if(offerB64){
-    setTimeout(async()=>{
-      myName = inputName.value.trim() || 'Guest';
-      isHost = false; connectMode = 'secure';
+      qjOfferIn.value = offerB64;
+      qjStep1.classList.remove('active'); qjStep2.classList.add('active');
+      qjStatus.querySelector('span').textContent='Auto-connecting\u2026';
+      toast('Processing Meeting PassKey\u2026');
+      try { await joinerProcessOffer(offerB64); } catch(e) {
+        console.error('[auto-join quick] Error:', e);
+        toast('Failed \u2014 paste the PassKey manually');
+        qjStep2.classList.remove('active'); qjStep1.classList.add('active');
+      }
+    } else {
+      // Secure Connect — show manual join view
+      connectMode = 'secure';
       showView('join');
       await acquireMedia(); attachPreview(joinPreview, joinPreviewOff);
       joinOfferIn.value = offerB64;
       toast('Meeting PassKey detected \u2014 click Generate Response Key');
-    }, 300);
-  }
+    }
+  }, 300);
 })();
 
 // Cleanup on unload
