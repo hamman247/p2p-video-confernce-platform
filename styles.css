@@ -195,6 +195,11 @@ html,body{height:100%;font-family:var(--ff);font-size:16px;color:var(--clr-text)
 .call-controls-wrap{position:relative;display:flex;gap:var(--sp-3);align-items:center}
 
 
+/* ═══ Landing Footer ═══ */
+.landing-footer{margin-top:var(--sp-4);padding:var(--sp-4) 0;text-align:center}
+.github-link{display:inline-flex;align-items:center;gap:var(--sp-2);color:var(--clr-text-dim);text-decoration:none;font-size:var(--fs-sm);font-weight:500;padding:var(--sp-2) var(--sp-4);border-radius:var(--r-full);border:1px solid var(--clr-border);transition:all var(--dur) var(--ease)}
+.github-link:hover{color:var(--clr-text);border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.04);transform:translateY(-1px)}
+
 /* Add participant overlay */
 .add-overlay{position:absolute;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);animation:fadeIn .25s var(--ease)}
 .add-overlay.hidden{display:none}
