@@ -338,6 +338,28 @@ function setExchState(which){
 }
 
 let answerRelay = null; // temporary PeerJS peer for receiving answers
+let answerRelayId = null; // stored so we can recreate with the same ID after mobile suspend
+
+// Setup relay connection listeners (reusable for reconnection)
+function setupRelayListeners(){
+  if(!answerRelay) return;
+  answerRelay.on('connection', conn => {
+    conn.on('data', async raw => {
+      try {
+        const msg = JSON.parse(raw);
+        if(msg.type==='sdp-answer' && msg.answer){
+          console.log('[Relay] Received answer automatically');
+          const ok = await hostProcessAnswer(msg.answer);
+          if(ok){
+            updateQuickHostUI();
+            const ov=$('#add-overlay'); if(ov&&!ov.classList.contains('hidden')) ov.classList.add('hidden');
+            clearOfferURL();
+          }
+        }
+      } catch(e){ console.warn('[Relay] Bad message:', e); }
+    });
+  });
+}
 
 async function hostGenOffer(withRelay=false){
   try {
@@ -355,38 +377,22 @@ async function hostGenOffer(withRelay=false){
     if(!withRelay) return encode(pc.localDescription);
 
     // Create temporary PeerJS relay to receive the answer automatically
-    const relayId = 'mm-' + crypto.randomUUID().slice(0,12);
+    answerRelayId = 'mm-' + crypto.randomUUID().slice(0,12);
     try {
-      answerRelay = new Peer(relayId, {config:RTC_CFG});
+      answerRelay = new Peer(answerRelayId, {config:RTC_CFG});
       await new Promise((resolve,reject) => {
         answerRelay.on('open', resolve);
         answerRelay.on('error', reject);
         setTimeout(()=>reject(new Error('timeout')), 8000);
       });
-      answerRelay.on('connection', conn => {
-        conn.on('data', async raw => {
-          try {
-            const msg = JSON.parse(raw);
-            if(msg.type==='sdp-answer' && msg.answer){
-              console.log('[Relay] Received answer automatically');
-              const ok = await hostProcessAnswer(msg.answer);
-              if(ok){
-                // Update Quick Host UI
-                updateQuickHostUI();
-                // Close add-overlay if open
-                const ov=$('#add-overlay'); if(ov&&!ov.classList.contains('hidden')) ov.classList.add('hidden');
-                clearOfferURL();
-              }
-            }
-          } catch(e){ console.warn('[Relay] Bad message:', e); }
-        });
-      });
-      console.log('[Relay] Listening on', relayId);
-      return encodeOffer(pc.localDescription, relayId);
+      setupRelayListeners();
+      console.log('[Relay] Listening on', answerRelayId);
+      return encodeOffer(pc.localDescription, answerRelayId);
     } catch(e) {
       console.warn('[Relay] PeerJS relay unavailable, manual exchange only:', e.message);
       if(answerRelay){try{answerRelay.destroy();}catch{}}
       answerRelay = null;
+      answerRelayId = null;
       return encode(pc.localDescription);
     }
   } catch(e) {
@@ -406,7 +412,7 @@ async function hostProcessAnswer(b64){
     setExchState(exchIdle);
     pendingPC=null;
     // Cleanup relay
-    if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null;}
+    if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null; answerRelayId=null;}
     toast('Participant connected!');
     return true;
   } catch(e) {
@@ -462,7 +468,7 @@ $('#btn-quick-join').addEventListener('click', async()=>{
 $('#qh-copy-link').addEventListener('click',()=>{ navigator.clipboard.writeText(getOfferLink(qhOfferOut.value)).then(()=>toast('Link copied! \ud83d\udd17')); });
 $('#qh-copy-key').addEventListener('click',()=>{ navigator.clipboard.writeText(qhOfferOut.value).then(()=>toast('PassKey copied! \ud83d\udccb')); });
 qhEnterCall.addEventListener("click",()=>enterCall());
-$('#qh-back').addEventListener('click',()=>{ cleanup(); clearOfferURL(); if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null;} showView('landing'); });
+$('#qh-back').addEventListener('click',()=>{ cleanup(); clearOfferURL(); if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null; answerRelayId=null;} showView('landing'); });
 $('#qh-mic').addEventListener('click',toggleMic);
 $('#qh-cam').addEventListener('click',toggleCam);
 $('#qj-connect').addEventListener('click',async()=>{
@@ -511,7 +517,7 @@ $('#host-next-step').addEventListener('click',()=>{ setExchState(exchAnswer); ho
 $('#host-connect-peer').addEventListener('click',async()=>{ await hostProcessAnswer(hostAnswerIn.value); });
 $('#host-cancel-exch').addEventListener('click',()=>{
   if(pendingPC){ const p=peers.get(pendingPC); if(p&&p.pc)p.pc.close(); peers.delete(pendingPC); pendingPC=null; }
-  if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null;}
+  if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null; answerRelayId=null;}
   setExchState(exchIdle);
 });
 btnEnterCall.addEventListener('click',()=>enterCall());
@@ -616,7 +622,7 @@ function endCall(){
 function cleanup(){
   peers.forEach((p)=>{ if(p.pc)try{p.pc.close();}catch{} if(p.mediaConn)try{p.mediaConn.close();}catch{} if(p.dataConn)try{p.dataConn.close();}catch{} });
   peers.clear();
-  if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null;}
+  if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null; answerRelayId=null;}
   if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
   if(screenStream){screenStream.getTracks().forEach(t=>t.stop());screenStream=null;}
   callGrid.innerHTML='';
@@ -939,7 +945,7 @@ $('#add-overlay-close').addEventListener('click',()=>{
   addOverlay.classList.add('hidden');
   clearOfferURL();
   if(pendingPC){const p=peers.get(pendingPC);if(p&&p.pc)p.pc.close();peers.delete(pendingPC);pendingPC=null;}
-  if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null;}
+  if(answerRelay){try{answerRelay.destroy();}catch{} answerRelay=null; answerRelayId=null;}
 });
 $('#add-copy-offer').addEventListener('click',()=>{ navigator.clipboard.writeText(addOfferOut.value).then(()=>toast('Offer copied! 📋')); });
 $('#add-copy-link').addEventListener('click',()=>{ navigator.clipboard.writeText(getOfferLink(addOfferOut.value)).then(()=>toast('Link copied! 🔗')); });
@@ -989,4 +995,43 @@ $('#add-connect').addEventListener('click',async()=>{
 
 // Cleanup on unload
 window.addEventListener('beforeunload',cleanup);
+
+// ── Mobile background/foreground resilience ──
+document.addEventListener('visibilitychange', async ()=>{
+  if(document.visibilityState !== 'visible') return;
+  console.log('[Visibility] Page returned to foreground');
+
+  // 1. Reconnect PeerJS relay if it died while in background
+  if(answerRelayId && pendingPC){
+    const relayAlive = answerRelay && !answerRelay.destroyed && !answerRelay.disconnected;
+    if(!relayAlive){
+      console.log('[Visibility] Relay died in background, reconnecting as', answerRelayId);
+      if(answerRelay){try{answerRelay.destroy();}catch{}}
+      try {
+        answerRelay = new Peer(answerRelayId, {config:RTC_CFG});
+        await new Promise((resolve,reject) => {
+          answerRelay.on('open', resolve);
+          answerRelay.on('error', reject);
+          setTimeout(()=>reject(new Error('timeout')), 8000);
+        });
+        setupRelayListeners();
+        console.log('[Visibility] Relay reconnected on', answerRelayId);
+        toast('Connection restored \u2714');
+      } catch(e) {
+        console.warn('[Visibility] Relay reconnect failed:', e.message);
+        toast('Relay lost \u2014 ask them to re-open the link');
+      }
+    }
+  }
+
+  // 2. Restart ICE for any disconnected WebRTC peers
+  peers.forEach((p, pid) => {
+    if(!p.pc) return;
+    const iceState = p.pc.iceConnectionState;
+    if(iceState === 'disconnected' || iceState === 'failed'){
+      console.log(`[Visibility] Restarting ICE for peer ${pid} (was ${iceState})`);
+      p.pc.restartIce();
+    }
+  });
+});
 })();
