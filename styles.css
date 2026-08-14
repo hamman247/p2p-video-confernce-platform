@@ -60,6 +60,11 @@ html,body{height:100%;font-family:var(--ff);font-size:16px;color:var(--clr-text)
 .mode-btns{display:flex;gap:var(--sp-2);margin-top:auto}
 
 /* Room code */
+.room-code-display{padding:var(--sp-4);background:var(--clr-surface2);border:1px solid var(--clr-border);border-radius:var(--r-md);text-align:center;margin-bottom:var(--sp-3)}
+.room-code-display span{font-family:'SF Mono','Fira Code',monospace;font-size:var(--fs-2xl);font-weight:800;letter-spacing:6px;background:var(--gradient-brand);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.room-code-input input{width:100%;padding:var(--sp-3) var(--sp-4);border-radius:var(--r-md);border:1px solid var(--clr-border);background:var(--clr-surface);color:var(--clr-text);font-family:'SF Mono','Fira Code',monospace;font-size:var(--fs-xl);font-weight:700;text-align:center;letter-spacing:4px;text-transform:uppercase;outline:none;transition:border-color var(--dur) var(--ease)}
+.room-code-input input:focus{border-color:var(--clr-accent);box-shadow:0 0 0 3px rgba(108,99,255,.15)}
+.room-code-input input::placeholder{font-size:var(--fs-sm);letter-spacing:0;text-transform:none;font-weight:400;color:var(--clr-text-dim);opacity:.5}
 
 /* ═══ Setup Views ═══ */
 #view-host,#view-join,#view-quick-host,#view-quick-join{align-items:center;justify-content:center;padding:var(--sp-6);overflow-y:auto;overflow-x:hidden}
