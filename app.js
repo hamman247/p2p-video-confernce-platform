@@ -60,7 +60,7 @@ let pendingPC = null; // PC being set up during manual exchange
 const peers = new Map();
 const MAX_PEERS = 6;
 const RTC_CFG = { iceServers: [{ urls:'stun:stun.l.google.com:19302' },{ urls:'stun:stun1.google.com:19302' }] };
-let sendQuality = 'high'; // 'high', 'medium', 'low'
+let sendQuality = 'medium'; // 'high', 'medium', 'low'
 
 // Broadcast a message to all peers regardless of connect mode
 function broadcastAny(msg, exclude){
@@ -105,7 +105,7 @@ function totalPeers(){ return peers.size + 1; } // +1 for self
 
 // ── Media ──
 async function acquireMedia(){
-  try{ localStream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:'user'},audio:{echoCancellation:true,noiseSuppression:true}}); micOn=true;camOn=true; }
+  try{ localStream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:'user'},audio:{echoCancellation:true,noiseSuppression:true}}); micOn=true;camOn=true; }
   catch{ try{ localStream=await navigator.mediaDevices.getUserMedia({audio:true}); micOn=true;camOn=false;toast('Camera unavailable — audio only'); }catch{ localStream=null;micOn=false;camOn=false;toast('No camera or mic found'); } }
   syncBtns();
 }
@@ -286,15 +286,22 @@ function onPeerConnected(peerId){
         sendTo(peerId,{type:'new-peer',peerId:oid});
       }
     });
-    updateHostUI();
+    if(connectMode==='quick') updateQuickHostUI();
+    else updateHostUI();
     // If we're in a call, add the tile immediately
     if(inCall) addVideoTile(peerId, p.name, p.stream);
   }
   // Joiner: if we're waiting to enter call, enable the button
   if(!isHost && !inCall){
-    joinStatus.classList.add('connected');
-    joinStatus.querySelector('span').textContent='Connected to host!';
-    joinEnterCall.style.display='';
+    if(connectMode==='quick'){
+      qjStatus.classList.add('connected');
+      qjStatus.querySelector('span').textContent='Connected to host!';
+      if(qjEnterCall) qjEnterCall.style.display='';
+    } else {
+      joinStatus.classList.add('connected');
+      joinStatus.querySelector('span').textContent='Connected to host!';
+      joinEnterCall.style.display='';
+    }
   }
   if(inCall){
     addVideoTile(peerId, p.name, p.stream);
@@ -540,15 +547,24 @@ async function joinerProcessOffer(offerB64){
   await pc.setRemoteDescription(desc);
   const answer=await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  joinAnswerOut.value='Gathering network info\u2026';
   await waitICE(pc);
   const answerB64 = encode(pc.localDescription);
-  joinAnswerOut.value=answerB64;
-  joinStep1.classList.remove('active');
-  joinStep2.classList.add('active');
+
+  // Update the correct UI based on connect mode
+  if(connectMode==='quick'){
+    // Quick mode: update quick join UI
+    qjStep1.classList.remove('active'); qjStep2.classList.add('active');
+  } else {
+    // Secure mode: update secure join UI
+    joinAnswerOut.value=answerB64;
+    joinStep1.classList.remove('active');
+    joinStep2.classList.add('active');
+  }
 
   // Auto-relay answer back to host if relay ID is present
   if(relay){
+    const statusEl = connectMode==='quick' ? qjStatus : joinStatus;
+    if(statusEl) statusEl.querySelector('span').textContent='Sending Response Key automatically\u2026';
     toast('Sending Response Key to host automatically\u2026');
     try {
       const relayPeer = new Peer(undefined, {config:RTC_CFG});
@@ -564,12 +580,34 @@ async function joinerProcessOffer(offerB64){
         setTimeout(()=>reject(new Error('timeout')), 8000);
       });
       conn.send(JSON.stringify({type:'sdp-answer', answer:answerB64}));
-      toast('Response Key sent automatically! Connecting\u2026');
-      // Clean up after a short delay to ensure delivery
+      toast('Response Key sent! Connecting\u2026');
+      if(statusEl) statusEl.querySelector('span').textContent='Connected! Entering call\u2026';
+      if(statusEl) statusEl.classList.add('connected');
+      // Clean up relay peer after a short delay to ensure delivery
       setTimeout(()=>{try{relayPeer.destroy();}catch{}}, 3000);
+      // Quick mode: auto-enter call once WebRTC connects
+      if(connectMode==='quick'){
+        // Wait for the WebRTC connection to establish, then enter call
+        const waitForConnection = ()=>{
+          if(entry.connected){
+            if(qjEnterCall) qjEnterCall.style.display='';
+            setTimeout(()=>enterCall(), 500);
+          } else {
+            setTimeout(waitForConnection, 500);
+          }
+        };
+        setTimeout(waitForConnection, 1000);
+      }
     } catch(e) {
       console.warn('[Relay] Auto-send failed, manual exchange still works:', e.message);
       toast('Auto-relay unavailable \u2014 copy Response Key manually');
+      // Fall back: show the answer for manual copy
+      if(connectMode==='quick'){
+        qjStatus.querySelector('span').textContent='Auto-relay failed \u2014 use Secure Connect instead';
+      } else {
+        joinAnswerOut.value=answerB64;
+        toast('Response Key ready \u2014 send it back to the host');
+      }
     }
   } else {
     toast('Response Key ready \u2014 send it back to the host');
